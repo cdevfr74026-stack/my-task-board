@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="zh-Hant">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>我的任務小窩</title>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+</head>
+<body>
+<div class="app">
+  <div class="grain"></div>
+  <header class="topbar">
+    <div class="brand">
+      <span class="eyebrow">🍑 小任務日記</span>
+      <h1>我的任務小窩</h1>
+    </div>
+    <div class="controls">
+      <div class="view-toggle" id="viewToggle">
+        <button class="vt-btn active" data-view="kanban">看板</button>
+        <button class="vt-btn" data-view="calendar">行事曆</button>
+      </div>
+      <button class="btn-mini" id="exportBtn" title="匯出備份檔">📤 匯出</button>
+      <button class="btn-mini" id="importBtn" title="匯入備份檔">📥 匯入</button>
+      <input type="file" id="importFileInput" accept="application/json,.json" style="display:none">
+      <button class="btn-add" id="openAddBtn">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+        新增任務
+      </button>
+    </div>
+  </header>
+
+  <div class="stats-strip" id="statsStrip"></div>
+
+  <div class="filter-strip" id="filterStrip"></div>
+
+  <!-- KANBAN VIEW -->
+  <main class="view" id="kanbanView">
+    <div class="board" id="board">
+      <section class="column" data-status="todo">
+        <div class="col-head">
+          <span class="col-tick">01</span>
+          <h2>待辦</h2>
+          <span class="col-count" id="count-todo">0</span>
+        </div>
+        <div class="col-body" data-dropzone="todo" id="list-todo"></div>
+      </section>
+      <section class="column" data-status="doing">
+        <div class="col-head">
+          <span class="col-tick">02</span>
+          <h2>進行中</h2>
+          <span class="col-count" id="count-doing">0</span>
+        </div>
+        <div class="col-body" data-dropzone="doing" id="list-doing"></div>
+      </section>
+      <section class="column" data-status="done">
+        <div class="col-head">
+          <span class="col-tick">03</span>
+          <h2>已完成</h2>
+          <span class="col-count" id="count-done">0</span>
+        </div>
+        <div class="col-body" data-dropzone="done" id="list-done"></div>
+      </section>
+    </div>
+  </main>
+
+  <!-- CALENDAR VIEW -->
+  <main class="view hidden" id="calendarView">
+    <div class="cal-toolbar">
+      <button class="cal-nav" id="prevMonth" aria-label="上一月">‹</button>
+      <div class="cal-title" id="calTitle">—</div>
+      <button class="cal-nav" id="nextMonth" aria-label="下一月">›</button>
+      <button class="cal-today" id="todayBtn">今天</button>
+    </div>
+    <div class="cal-weekdays">
+      <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+    </div>
+    <div class="cal-grid" id="calGrid"></div>
+  </main>
+
+  <!-- DAY DETAIL PANEL -->
+  <div class="day-panel" id="dayPanel">
+    <div class="day-panel-head">
+      <span class="eyebrow" id="dayPanelDate">—</span>
+      <button class="icon-btn" id="closeDayPanel">✕</button>
+    </div>
+    <div class="day-panel-list" id="dayPanelList"></div>
+    <button class="btn-add small" id="dayPanelAdd">+ 在此日新增任務</button>
+  </div>
+
+  <!-- MODAL -->
+  <div class="modal-overlay hidden" id="modalOverlay">
+    <div class="modal">
+      <div class="modal-head">
+        <span class="eyebrow" id="modalEyebrow">NEW TASK</span>
+        <h3 id="modalTitle">新增任務</h3>
+      </div>
+      <form id="taskForm">
+        <label class="field">
+          <span>標題</span>
+          <input type="text" id="f-title" required placeholder="例如：完成季度報告">
+        </label>
+        <label class="field">
+          <span>說明</span>
+          <textarea id="f-desc" rows="3" placeholder="補充細節（選填）"></textarea>
+        </label>
+        <div class="field-row">
+          <label class="field">
+            <span>狀態</span>
+            <select id="f-status">
+              <option value="todo">待辦</option>
+              <option value="doing">進行中</option>
+              <option value="done">已完成</option>
+            </select>
+          </label>
+          <label class="field">
+            <span>優先度</span>
+            <select id="f-priority">
+              <option value="low">低</option>
+              <option value="medium" selected>中</option>
+              <option value="high">高</option>
+            </select>
+          </label>
+        </div>
+        <label class="field">
+          <span>專案分類</span>
+          <select id="f-category">
+            <option value="perf">績效考核</option>
+            <option value="promo">升遷制度</option>
+            <option value="payroll">薪資計算</option>
+            <option value="medical">臨場醫護</option>
+            <option value="urgent">突發任務</option>
+            <option value="routine">扣繳申報資料</option>
+            <option value="labor">勞動契約</option>
+            <option value="general">例行公事</option>
+          </select>
+        </label>
+        <label class="field">
+          <span>截止日期</span>
+          <input type="date" id="f-due">
+        </label>
+        <div class="modal-actions">
+          <button type="button" class="btn-ghost" id="deleteTaskBtn">刪除</button>
+          <div class="modal-actions-right">
+            <button type="button" class="btn-ghost" id="cancelModalBtn">取消</button>
+            <button type="button" class="btn-solid" id="saveTaskBtn">儲存</button>
+          </div>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <div class="toast" id="toast"></div>
+
+  <div class="confirm-overlay hidden" id="confirmOverlay">
+    <div class="confirm-box">
+      <p id="confirmMessage">確定要執行這個動作嗎？</p>
+      <div class="confirm-actions">
+        <button class="btn-ghost" id="confirmCancelBtn">取消</button>
+        <button class="btn-solid" id="confirmOkBtn">確定</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Baloo+2:wght@500;600;700;800&family=Nunito:wght@400;600;700;800&display=swap');
+
+:root{
+  --bg: #FFF6EC;
+  --panel: #FFFFFF;
+  --panel-2: #FFF1E4;
+  --grid-line: #FFE1CC;
+  --ink: #6B4A45;
+  --ink-dim: #B79A8E;
+  --ink-faint: #D8BFB2;
+  --amber: #FFC15E;
+  --teal: #6FC6B4;
+  --rose: #FF8FA3;
+  --green: #8FD694;
+  --coral: #FF9B85;
+  --lavender: #C9AEE8;
+  --cat-perf: #C9AEE8;
+  --cat-promo: #FFC15E;
+  --cat-payroll: #6FC6B4;
+  --cat-medical: #FF8FA3;
+  --cat-urgent: #FF7A5C;
+  --cat-routine: #8FB8E8;
+  --cat-labor: #C9A66B;
+  --cat-general: #A8C8B0;
+  --font-display: 'Baloo 2', 'Quicksand', ui-rounded, sans-serif;
+  --font-body: 'Nunito', -apple-system, sans-serif;
+}
+
+*{box-sizing:border-box;}
+.app{
+  position:relative;
+  font-family: var(--font-body);
+  color: var(--ink);
+  background:
+    radial-gradient(circle at 8% 12%, rgba(255,196,163,0.35) 0, transparent 40%),
+    radial-gradient(circle at 92% 8%, rgba(201,174,232,0.3) 0, transparent 38%),
+    radial-gradient(circle at 85% 90%, rgba(143,214,148,0.25) 0, transparent 40%),
+    radial-gradient(circle at 10% 88%, rgba(255,193,94,0.28) 0, transparent 40%),
+    var(--bg);
+  min-height: 100%;
+  padding: 28px 32px 60px;
+}
+.grain{ display:none; }
+
+.eyebrow{
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  color: var(--coral);
+  text-transform: none;
+  display:block;
+  margin-bottom: 4px;
+}
+
+.topbar{
+  display:flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  flex-wrap: wrap;
+  gap: 16px;
+  border-bottom: 3px dashed var(--grid-line);
+  padding-bottom: 18px;
+  margin-bottom: 18px;
+}
+.brand h1{
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 30px;
+  margin: 0;
+  color: var(--ink);
+  letter-spacing: 0.01em;
+}
+.controls{ display:flex; align-items:center; gap: 12px; }
+
+.view-toggle{
+  display:flex;
+  border: 2px solid var(--grid-line);
+  border-radius: 999px;
+  overflow:hidden;
+  background: var(--panel);
+  padding: 3px;
+}
+.vt-btn{
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 13px;
+  padding: 8px 18px;
+  background: transparent;
+  border:none;
+  border-radius: 999px;
+  color: var(--ink-dim);
+  cursor:pointer;
+  transition: all .18s ease;
+}
+.vt-btn.active{ background: var(--coral); color: #fff; box-shadow: 0 3px 8px rgba(255,155,133,0.4); }
+.vt-btn:hover:not(.active){ color: var(--ink); }
+
+.btn-add{
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 14px;
+  display:flex; align-items:center; gap:6px;
+  padding: 11px 18px;
+  background: var(--coral);
+  color: #fff;
+  border:none;
+  border-radius: 999px;
+  cursor:pointer;
+  box-shadow: 0 4px 0 #E67F68;
+  transition: transform .12s ease, box-shadow .12s ease;
+}
+.btn-add:hover{ transform: translateY(-2px); }
+.btn-add:active{ transform: translateY(1px); box-shadow: 0 2px 0 #E67F68; }
+.btn-add.small{ font-size:12.5px; padding:9px 14px; width: 100%; justify-content:center; margin-top: 10px; box-shadow: 0 3px 0 #E67F68; }
+
+.btn-mini{
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  padding: 9px 14px;
+  background: var(--panel);
+  border: 2px solid var(--grid-line);
+  color: var(--ink-dim);
+  border-radius: 999px;
+  cursor: pointer;
+  transition: all .15s ease;
+}
+.btn-mini:hover{ border-color: var(--coral); color: var(--coral); }
+
+.confirm-overlay{
+  position:fixed; inset:0; background: rgba(107,74,69,0.35);
+  display:flex; align-items:center; justify-content:center; z-index: 55;
+  backdrop-filter: blur(2px);
+}
+.confirm-overlay.hidden{ display:none; }
+.confirm-box{
+  background: var(--panel); border:3px solid var(--grid-line); border-radius: 20px;
+  width: 320px; max-width: 88vw; padding: 22px 22px 18px;
+  box-shadow: 0 10px 0 rgba(255,225,204,0.6);
+}
+.confirm-box p{ font-size:14px; line-height:1.6; color: var(--ink); margin: 0 0 18px; font-weight:600; }
+.confirm-actions{ display:flex; justify-content:flex-end; gap:10px; }
+
+.stats-strip{
+  display:flex; gap: 14px; margin-bottom: 22px; flex-wrap:wrap;
+}
+.stat-chip{
+  font-family: var(--font-display);
+  font-weight: 600;
+  font-size: 12.5px;
+  color: var(--ink-dim);
+  display:flex; align-items:center; gap:6px;
+  background: var(--panel);
+  border: 2px solid var(--grid-line);
+  padding: 7px 14px;
+  border-radius: 999px;
+}
+.stat-chip b{ color: var(--ink); font-size: 14px; }
+.stat-dot{ width:8px; height:8px; border-radius:50%; }
+
+.filter-strip{ display:flex; gap:8px; margin-bottom: 20px; flex-wrap:wrap; }
+.filter-chip{
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 12px;
+  display:flex; align-items:center; gap:6px;
+  background: var(--panel);
+  border: 2px solid var(--grid-line);
+  color: var(--ink-dim);
+  padding: 6px 13px;
+  border-radius: 999px;
+  cursor:pointer;
+  transition: all .15s ease;
+}
+.filter-chip .fc-dot{ width:8px; height:8px; border-radius:50%; }
+.filter-chip:hover{ border-color: var(--coral); color: var(--ink); }
+.filter-chip.active{ background: var(--ink); border-color: var(--ink); color: #fff; }
+.filter-chip.active .fc-dot{ box-shadow: 0 0 0 2px rgba(255,255,255,0.4); }
+
+.cat-badge{
+  display:inline-block;
+  font-family: var(--font-body);
+  font-weight: 700;
+  font-size: 10.5px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  margin-bottom: 7px;
+  color: var(--ink);
+}
+
+.view.hidden{ display:none; }
+
+/* KANBAN */
+.board{ display:grid; grid-template-columns: repeat(3, 1fr); gap: 18px; align-items:start; }
+.column{
+  background: var(--panel);
+  border: 3px solid var(--grid-line);
+  border-radius: 20px;
+  min-height: 200px;
+  display:flex; flex-direction:column;
+  box-shadow: 0 6px 0 rgba(255,225,204,0.6);
+}
+.col-head{
+  display:flex; align-items:center; gap:8px;
+  padding: 14px 16px;
+  border-bottom: 3px dashed var(--grid-line);
+}
+.col-tick{ font-family: var(--font-display); font-size: 0; line-height:1; }
+.column[data-status="todo"] .col-tick::before{ content:"📝"; font-size:18px; }
+.column[data-status="doing"] .col-tick::before{ content:"🌱"; font-size:18px; }
+.column[data-status="done"] .col-tick::before{ content:"🎉"; font-size:18px; }
+.col-head h2{ font-family: var(--font-display); font-size: 15px; margin:0; flex:1; font-weight:700; color: var(--ink); }
+.col-count{
+  font-family: var(--font-display);
+  font-weight:700;
+  font-size: 12px;
+  color: var(--coral);
+  background: var(--panel-2);
+  border-radius: 999px;
+  padding: 3px 10px;
+}
+.col-body{ padding: 12px; display:flex; flex-direction:column; gap:10px; flex:1; min-height: 80px; }
+.col-body.drag-over{ background: rgba(255,193,94,0.12); outline: 3px dashed var(--amber); outline-offset: -6px; border-radius: 14px; }
+
+.task-card{
+  position:relative;
+  background: var(--panel-2);
+  border: 2px solid var(--grid-line);
+  border-radius: 14px;
+  padding: 13px 14px 11px;
+  cursor: grab;
+  transition: transform .15s ease, box-shadow .15s ease;
+  box-shadow: 0 3px 0 rgba(255,225,204,0.8);
+}
+.task-card:hover{ border-color: var(--coral); transform: translateY(-2px) rotate(-0.4deg); box-shadow: 0 5px 10px rgba(255,155,133,0.18); }
+.task-card:active{ cursor: grabbing; }
+.task-card::before{ display:none; }
+.task-card .t-title{ font-weight:700; font-size:14px; margin-bottom:6px; padding-right: 10px; line-height:1.4; color: var(--ink); }
+.task-card .t-desc{ font-size:12.5px; color: var(--ink-dim); margin-bottom:8px; line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
+.task-card .t-meta{ display:flex; align-items:center; gap:8px; font-family: var(--font-body); font-weight:600; font-size: 11.5px; color: var(--ink-faint); }
+.pri-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; box-shadow: 0 0 0 3px rgba(0,0,0,0.03); }
+.t-due{ margin-left:auto; background: var(--panel); padding: 2px 8px; border-radius: 999px; }
+.t-due.overdue{ color: #fff; background: var(--rose); }
+.empty-col{ font-size:12.5px; color: var(--ink-faint); text-align:center; padding: 24px 8px; font-family: var(--font-body); font-weight:600; }
+
+/* CALENDAR */
+.cal-toolbar{ display:flex; align-items:center; gap:14px; margin-bottom: 14px; }
+.cal-title{ font-family: var(--font-display); font-weight:700; font-size:18px; min-width: 140px; color: var(--ink); }
+.cal-nav{
+  width:32px; height:32px; border-radius:50%; border:2px solid var(--grid-line);
+  background: var(--panel); color: var(--coral); font-size:16px; font-weight:700; cursor:pointer;
+}
+.cal-nav:hover{ background: var(--coral); color:#fff; border-color: var(--coral); }
+.cal-today{
+  font-family: var(--font-display); font-weight:700; font-size:12px;
+  border:2px solid var(--grid-line); background:var(--panel); color:var(--ink-dim);
+  padding:8px 14px; border-radius:999px; cursor:pointer;
+}
+.cal-today:hover{ color: #fff; background: var(--coral); border-color: var(--coral); }
+
+.cal-weekdays{
+  display:grid; grid-template-columns: repeat(7,1fr);
+  font-family: var(--font-display); font-weight:700; font-size:12px; color: var(--coral);
+  padding: 0 2px 8px;
+}
+.cal-weekdays span{ text-align:center; }
+.cal-weekdays span:first-child, .cal-weekdays span:last-child{ color: var(--rose); }
+
+.cal-grid{ display:grid; grid-template-columns: repeat(7,1fr); gap:7px; }
+.cal-cell{
+  background: var(--panel);
+  border: 2px solid var(--grid-line);
+  border-radius: 14px;
+  min-height: 92px;
+  padding: 7px;
+  cursor:pointer;
+  display:flex; flex-direction:column; gap:4px;
+  transition: all .12s ease;
+}
+.cal-cell:hover{ border-color: var(--coral); transform: translateY(-1px); }
+.cal-cell.out{ opacity: 0.4; cursor:default; }
+.cal-cell.out:hover{ transform:none; border-color: var(--grid-line); }
+.cal-cell.today{ border-color: var(--coral); background: #FFF0EA; }
+.cal-cell.drag-over{ background: rgba(255,193,94,0.15); }
+.cal-daynum{ font-family: var(--font-display); font-weight:700; font-size:12.5px; color: var(--ink-dim); }
+.cal-daynum.holiday{ color: var(--rose); }
+.cal-cell.today .cal-daynum{ color: var(--coral); }
+.holiday-label{ font-family: var(--font-body); font-weight:800; font-size:9.5px; color: var(--rose); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; margin-top:-2px; }
+.cal-chip{
+  font-size: 10.5px; font-weight:700; padding: 2px 7px; border-radius: 999px;
+  background: var(--panel-2); color: var(--ink);
+  white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
+  border-left: 4px solid var(--ink-faint);
+}
+.cal-more{ font-family: var(--font-display); font-weight:700; font-size:10px; color: var(--ink-faint); }
+
+/* DAY PANEL */
+.day-panel{
+  position:fixed; top:0; right:-360px; width:340px; height:100%;
+  background: var(--panel); border-left: 3px solid var(--grid-line);
+  padding: 22px 18px; z-index: 40; transition: right .22s ease;
+  overflow-y:auto;
+  box-shadow: -8px 0 24px rgba(255,155,133,0.12);
+}
+.day-panel.open{ right:0; }
+.day-panel-head{ display:flex; justify-content:space-between; align-items:flex-start; margin-bottom:16px; }
+.day-panel-list{ display:flex; flex-direction:column; gap:10px; }
+.icon-btn{ background: var(--panel-2); border:none; color: var(--ink-dim); font-size:13px; cursor:pointer; width:26px; height:26px; border-radius:50%; }
+.icon-btn:hover{ color: #fff; background: var(--rose); }
+
+/* MODAL */
+.modal-overlay{
+  position:fixed; inset:0; background: rgba(107,74,69,0.35);
+  display:flex; align-items:center; justify-content:center; z-index: 50;
+  backdrop-filter: blur(2px);
+}
+.modal-overlay.hidden{ display:none; }
+.modal{
+  background: var(--panel); border:3px solid var(--grid-line); border-radius: 24px;
+  width: 420px; max-width: 92vw; padding: 24px 26px; max-height: 88vh; overflow-y:auto;
+  box-shadow: 0 12px 0 rgba(255,225,204,0.6);
+}
+.modal-head{ margin-bottom: 16px; }
+.modal-head h3{ margin:0; font-family: var(--font-display); font-size:20px; color: var(--ink); }
+.field{ display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+.field span{ font-size:12.5px; color: var(--ink-dim); font-weight:700; }
+.field-row{ display:flex; gap:12px; }
+.field-row .field{ flex:1; }
+input, textarea, select{
+  font-family: var(--font-body); font-weight:600; font-size:13.5px; color: var(--ink);
+  background: var(--panel-2); border: 2px solid var(--grid-line);
+  border-radius:12px; padding: 10px 12px; outline:none; resize: vertical;
+}
+input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
+.modal-actions{ display:flex; justify-content:space-between; align-items:center; margin-top: 6px; }
+.modal-actions-right{ display:flex; gap:10px; }
+.btn-ghost{
+  background: var(--panel-2); border:2px solid var(--grid-line); color: var(--ink-dim);
+  padding: 9px 16px; border-radius:999px; font-weight:700; font-size:13px; cursor:pointer;
+}
+.btn-ghost:hover{ color: #fff; border-color: var(--rose); background: var(--rose); }
+.btn-solid{
+  background: var(--coral); color:#fff; border:none; font-weight:700;
+  padding: 10px 20px; border-radius:999px; font-size:13.5px; cursor:pointer;
+  box-shadow: 0 4px 0 #E67F68;
+}
+.btn-solid:hover{ transform: translateY(-1px); }
+
+.toast{
+  position:fixed; bottom:24px; left:50%; transform: translateX(-50%) translateY(20px);
+  background: var(--coral); border:none; color:#fff;
+  padding: 11px 20px; border-radius:999px; font-size:13px; font-weight:700; opacity:0; pointer-events:none;
+  transition: all .2s ease; z-index:60; font-family: var(--font-display);
+  box-shadow: 0 4px 14px rgba(255,155,133,0.4);
+}
+.toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
+
+@media (max-width: 760px){
+  .board{ grid-template-columns: 1fr; }
+  .app{ padding: 18px 16px 40px; }
+  .day-panel{ width: 88vw; right: -100vw; }
+  .cal-cell{ min-height: 70px; }
+}
+</style>
+
+<script>
+(function(){
+  // ====== Firebase 設定區（請把下面換成你自己 Firebase 專案的資料） ======
+  const firebaseConfig = {
+    apiKey: "AIzaSyDc1ZzW7duTTemuaAMIYPps1aL40McGe70",
+    authDomain: "my-task-board-54beb.firebaseapp.com",
+    projectId: "my-task-board-54beb",
+    storageBucket: "my-task-board-54beb.firebasestorage.app",
+    messagingSenderId: "967628024093",
+    appId: "1:967628024093:web:78ad5e6b984b5ad47ed9f4"
+  };
+  // =====================================================================
+
+  let db = null;
+  let taskDocRef = null;
+  let firebaseReady = false;
+  try{
+    firebase.initializeApp(firebaseConfig);
+    db = firebase.firestore();
+    taskDocRef = db.collection('taskboard').doc('data');
+    firebaseReady = true;
+  }catch(e){
+    console.error('Firebase 初始化失敗', e);
+  }
+
+  let tasks = [];
+  let currentView = 'kanban';
+  let calDate = new Date();
+  let editingId = null;
+  let dayPanelDate = null;
+
+  const PRI_COLOR = { low: 'var(--teal)', medium: 'var(--amber)', high: 'var(--rose)' };
+  const PRI_LABEL = { low: '低', medium: '中', high: '高' };
+  const STATUS_LABEL = { todo: '待辦', doing: '進行中', done: '已完成' };
+  const CATEGORY_LABEL = {
+    perf: '績效考核', promo: '升遷制度', payroll: '薪資計算',
+    medical: '臨場醫護', urgent: '突發任務', routine: '扣繳申報資料',
+    labor: '勞動契約', general: '例行公事'
+  };
+  const CATEGORY_COLOR = {
+    perf: 'var(--cat-perf)', promo: 'var(--cat-promo)', payroll: 'var(--cat-payroll)',
+    medical: 'var(--cat-medical)', urgent: 'var(--cat-urgent)', routine: 'var(--cat-routine)',
+    labor: 'var(--cat-labor)', general: 'var(--cat-general)'
+  };
+  let categoryFilter = 'all';
+
+  // 2026年（民國115年）台灣國定假日與補假資料
+  const TW_HOLIDAYS = {
+    '2026-01-01': '元旦',
+    '2026-02-15': '小年夜',
+    '2026-02-16': '除夕',
+    '2026-02-17': '春節',
+    '2026-02-18': '春節',
+    '2026-02-19': '春節',
+    '2026-02-20': '小年夜補假',
+    '2026-02-27': '和平紀念日補假',
+    '2026-02-28': '和平紀念日',
+    '2026-04-03': '兒童節補假',
+    '2026-04-04': '兒童節',
+    '2026-04-05': '清明節',
+    '2026-04-06': '清明節補假',
+    '2026-05-01': '勞動節',
+    '2026-06-19': '端午節',
+    '2026-09-25': '中秋節',
+    '2026-09-28': '教師節',
+    '2026-10-09': '國慶日補假',
+    '2026-10-10': '國慶日',
+    '2026-10-25': '台灣光復節',
+    '2026-10-26': '台灣光復節補假',
+    '2026-12-25': '行憲紀念日',
+  };
+
+  function uid(){ return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
+
+  function todayStr(){
+    const d = new Date();
+    return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+  }
+
+  function loadTasks(){
+    if(!firebaseReady){
+      showToast('⚠️ 尚未設定 Firebase，請聯絡管理者設定 firebaseConfig');
+      renderAll();
+      return;
+    }
+    taskDocRef.onSnapshot(
+      (snap)=>{
+        tasks = (snap.exists && snap.data().tasks) ? snap.data().tasks : [];
+        renderAll();
+      },
+      (err)=>{
+        console.error(err);
+        showToast('讀取雲端資料失敗，請檢查網路或 Firebase 設定');
+      }
+    );
+  }
+
+  async function persist(){
+    if(!firebaseReady) return;
+    try{
+      await taskDocRef.set({ tasks });
+    }catch(e){
+      console.error(e);
+      showToast('儲存到雲端失敗，請重試');
+    }
+  }
+
+  function showToast(msg){
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.classList.add('show');
+    clearTimeout(t._timer);
+    t._timer = setTimeout(()=> t.classList.remove('show'), 1800);
+  }
+
+  function renderAll(){
+    renderStats();
+    renderFilterStrip();
+    renderKanban();
+    renderCalendar();
+    if(dayPanelDate) renderDayPanel(dayPanelDate);
+  }
+
+  function renderFilterStrip(){
+    const strip = document.getElementById('filterStrip');
+    const chips = [`<button class="filter-chip ${categoryFilter==='all'?'active':''}" data-cat="all">✨ 全部</button>`];
+    Object.keys(CATEGORY_LABEL).forEach(key=>{
+      chips.push(`<button class="filter-chip ${categoryFilter===key?'active':''}" data-cat="${key}"><span class="fc-dot" style="background:${CATEGORY_COLOR[key]}"></span>${CATEGORY_LABEL[key]}</button>`);
+    });
+    strip.innerHTML = chips.join('');
+    strip.querySelectorAll('.filter-chip').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        categoryFilter = btn.dataset.cat;
+        renderFilterStrip();
+        renderKanban();
+        renderCalendar();
+      });
+    });
+  }
+
+  function visibleTasks(){
+    return categoryFilter === 'all' ? tasks : tasks.filter(t => t.category === categoryFilter);
+  }
+
+  function renderStats(){
+    const strip = document.getElementById('statsStrip');
+    const total = tasks.length;
+    const done = tasks.filter(t=>t.status==='done').length;
+    const overdue = tasks.filter(t=> t.dueDate && t.dueDate < todayStr() && t.status !== 'done').length;
+    strip.innerHTML = `
+      <div class="stat-chip">總計 <b>${total}</b></div>
+      <div class="stat-chip"><span class="stat-dot" style="background:var(--green)"></span>完成 <b>${done}</b></div>
+      <div class="stat-chip"><span class="stat-dot" style="background:var(--rose)"></span>逾期 <b>${overdue}</b></div>
+    `;
+  }
+
+  function fmtDue(d){
+    if(!d) return '';
+    const [y,m,day] = d.split('-');
+    return `${m}/${day}`;
+  }
+
+  function taskCardHTML(t){
+    const overdue = t.dueDate && t.dueDate < todayStr() && t.status !== 'done';
+    const cat = t.category || 'routine';
+    return `
+      <div class="task-card" draggable="true" data-id="${t.id}">
+        <span class="cat-badge" style="background:${CATEGORY_COLOR[cat]}">${CATEGORY_LABEL[cat]}</span>
+        <div class="t-title">${escapeHtml(t.title)}</div>
+        ${t.description ? `<div class="t-desc">${escapeHtml(t.description)}</div>` : ''}
+        <div class="t-meta">
+          <span class="pri-dot" style="background:${PRI_COLOR[t.priority]}"></span>
+          <span>${PRI_LABEL[t.priority]}優先</span>
+          ${t.dueDate ? `<span class="t-due ${overdue?'overdue':''}">${fmtDue(t.dueDate)}</span>` : ''}
+        </div>
+      </div>
+    `;
+  }
+
+  function escapeHtml(s){
+    return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+  }
+
+  function renderKanban(){
+    const pool = visibleTasks();
+    ['todo','doing','done'].forEach(status=>{
+      const list = pool.filter(t=>t.status===status).sort((a,b)=> (a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
+      document.getElementById('count-'+status).textContent = list.length;
+      const container = document.getElementById('list-'+status);
+      container.innerHTML = list.length ? list.map(taskCardHTML).join('') : `<div class="empty-col">— 尚無任務 —</div>`;
+    });
+    document.querySelectorAll('.task-card').forEach(card=>{
+      card.addEventListener('click', ()=> openModal(card.dataset.id));
+      card.addEventListener('dragstart', e=>{
+        e.dataTransfer.setData('text/plain', card.dataset.id);
+        setTimeout(()=> card.style.opacity='0.4', 0);
+      });
+      card.addEventListener('dragend', ()=>{ card.style.opacity='1'; });
+    });
+  }
+
+  function setupDropzones(){
+    document.querySelectorAll('[data-dropzone]').forEach(zone=>{
+      zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('drag-over'); });
+      zone.addEventListener('dragleave', ()=> zone.classList.remove('drag-over'));
+      zone.addEventListener('drop', e=>{
+        e.preventDefault();
+        zone.classList.remove('drag-over');
+        const id = e.dataTransfer.getData('text/plain');
+        const task = tasks.find(t=>t.id===id);
+        if(task){ task.status = zone.dataset.dropzone; persist(); renderAll(); }
+      });
+    });
+  }
+
+  function renderCalendar(){
+    const y = calDate.getFullYear(), m = calDate.getMonth();
+    document.getElementById('calTitle').textContent = `${y}年 ${m+1}月`;
+    const firstDay = new Date(y, m, 1);
+    const startOffset = firstDay.getDay();
+    const daysInMonth = new Date(y, m+1, 0).getDate();
+    const daysInPrevMonth = new Date(y, m, 0).getDate();
+    const grid = document.getElementById('calGrid');
+    let cells = [];
+    for(let i=startOffset-1;i>=0;i--){
+      cells.push({ day: daysInPrevMonth-i, out:true, dateStr: null });
+    }
+    for(let d=1; d<=daysInMonth; d++){
+      const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
+      cells.push({ day:d, out:false, dateStr });
+    }
+    while(cells.length % 7 !== 0){
+      cells.push({ day: cells.length, out:true, dateStr:null });
+    }
+    const today = todayStr();
+    const pool = visibleTasks();
+    grid.innerHTML = cells.map(c=>{
+      if(c.out) return `<div class="cal-cell out"><span class="cal-daynum">${c.day}</span></div>`;
+      const dayTasks = pool.filter(t=>t.dueDate === c.dateStr);
+      const isToday = c.dateStr === today;
+      const shown = dayTasks.slice(0,3);
+      const more = dayTasks.length - shown.length;
+      const dow = new Date(c.dateStr + 'T00:00:00').getDay();
+      const isWeekend = dow === 0 || dow === 6;
+      const holidayName = TW_HOLIDAYS[c.dateStr];
+      const isHoliday = isWeekend || !!holidayName;
+      return `<div class="cal-cell ${isToday?'today':''}" data-date="${c.dateStr}">
+        <span class="cal-daynum ${isHoliday?'holiday':''}">${c.day}</span>
+        ${holidayName ? `<span class="holiday-label">${escapeHtml(holidayName)}</span>` : ''}
+        ${shown.map(t=>`<div class="cal-chip" style="border-left-color:${CATEGORY_COLOR[t.category || 'routine']}">${escapeHtml(t.title)}</div>`).join('')}
+        ${more>0 ? `<span class="cal-more">+${more} 更多</span>` : ''}
+      </div>`;
+    }).join('');
+    grid.querySelectorAll('.cal-cell:not(.out)').forEach(cell=>{
+      cell.addEventListener('click', ()=> openDayPanel(cell.dataset.date));
+      cell.addEventListener('dragover', e=>{ e.preventDefault(); cell.classList.add('drag-over'); });
+      cell.addEventListener('dragleave', ()=> cell.classList.remove('drag-over'));
+      cell.addEventListener('drop', e=>{
+        e.preventDefault();
+        cell.classList.remove('drag-over');
+        const id = e.dataTransfer.getData('text/plain');
+        const task = tasks.find(t=>t.id===id);
+        if(task){ task.dueDate = cell.dataset.date; persist(); renderAll(); }
+      });
+    });
+  }
+
+  function openDayPanel(dateStr){
+    dayPanelDate = dateStr;
+    renderDayPanel(dateStr);
+    document.getElementById('dayPanel').classList.add('open');
+  }
+  function renderDayPanel(dateStr){
+    document.getElementById('dayPanelDate').textContent = dateStr;
+    const list = tasks.filter(t=>t.dueDate===dateStr);
+    const container = document.getElementById('dayPanelList');
+    container.innerHTML = list.length ? list.map(t=>`
+      <div class="task-card" data-id="${t.id}" draggable="true">
+        <span class="cat-badge" style="background:${CATEGORY_COLOR[t.category || 'routine']}">${CATEGORY_LABEL[t.category || 'routine']}</span>
+        <div class="t-title">${escapeHtml(t.title)}</div>
+        <div class="t-meta">
+          <span class="pri-dot" style="background:${PRI_COLOR[t.priority]}"></span>
+          <span>${STATUS_LABEL[t.status]}</span>
+        </div>
+      </div>
+    `).join('') : `<div class="empty-col">此日尚無任務</div>`;
+    container.querySelectorAll('.task-card').forEach(card=>{
+      card.addEventListener('click', ()=> openModal(card.dataset.id));
+    });
+  }
+
+  function openModal(id){
+    editingId = id || null;
+    const form = document.getElementById('taskForm');
+    form.reset();
+    document.getElementById('deleteTaskBtn').style.display = id ? 'inline-block' : 'none';
+    if(id){
+      const t = tasks.find(x=>x.id===id);
+      document.getElementById('modalEyebrow').textContent = 'EDIT TASK';
+      document.getElementById('modalTitle').textContent = '編輯任務';
+      document.getElementById('f-title').value = t.title;
+      document.getElementById('f-desc').value = t.description || '';
+      document.getElementById('f-status').value = t.status;
+      document.getElementById('f-priority').value = t.priority;
+      document.getElementById('f-category').value = t.category || 'routine';
+      document.getElementById('f-due').value = t.dueDate || '';
+    } else {
+      document.getElementById('modalEyebrow').textContent = 'NEW TASK';
+      document.getElementById('modalTitle').textContent = '新增任務';
+      document.getElementById('f-category').value = categoryFilter !== 'all' ? categoryFilter : 'routine';
+      document.getElementById('f-due').value = dayPanelDate && document.getElementById('dayPanel').classList.contains('open') ? dayPanelDate : '';
+    }
+    document.getElementById('modalOverlay').classList.remove('hidden');
+    document.getElementById('f-title').focus();
+  }
+  function closeModal(){
+    document.getElementById('modalOverlay').classList.add('hidden');
+    editingId = null;
+  }
+
+  function switchView(view){
+    currentView = view;
+    document.querySelectorAll('.vt-btn').forEach(b=> b.classList.toggle('active', b.dataset.view===view));
+    document.getElementById('kanbanView').classList.toggle('hidden', view!=='kanban');
+    document.getElementById('calendarView').classList.toggle('hidden', view!=='calendar');
+  }
+
+  // events
+  document.getElementById('viewToggle').addEventListener('click', e=>{
+    const btn = e.target.closest('.vt-btn');
+    if(btn) switchView(btn.dataset.view);
+  });
+  document.getElementById('openAddBtn').addEventListener('click', ()=> openModal(null));
+  document.getElementById('cancelModalBtn').addEventListener('click', closeModal);
+  document.getElementById('modalOverlay').addEventListener('click', e=>{ if(e.target.id==='modalOverlay') closeModal(); });
+  document.getElementById('closeDayPanel').addEventListener('click', ()=>{
+    document.getElementById('dayPanel').classList.remove('open');
+    dayPanelDate = null;
+  });
+  document.getElementById('dayPanelAdd').addEventListener('click', ()=> openModal(null));
+
+  function saveTask(){
+    const titleInput = document.getElementById('f-title');
+    const title = titleInput.value.trim();
+    if(!title){
+      titleInput.style.borderColor = 'var(--rose)';
+      titleInput.focus();
+      showToast('請先填寫標題');
+      return;
+    }
+    titleInput.style.borderColor = '';
+    const data = {
+      title,
+      description: document.getElementById('f-desc').value.trim(),
+      status: document.getElementById('f-status').value,
+      priority: document.getElementById('f-priority').value,
+      category: document.getElementById('f-category').value,
+      dueDate: document.getElementById('f-due').value || null,
+    };
+    if(editingId){
+      const t = tasks.find(x=>x.id===editingId);
+      Object.assign(t, data);
+      showToast('任務已更新');
+    } else {
+      tasks.push({ id: uid(), createdAt: Date.now(), ...data });
+      showToast('任務已新增');
+    }
+    persist();
+    renderAll();
+    closeModal();
+  }
+
+  document.getElementById('saveTaskBtn').addEventListener('click', saveTask);
+  document.getElementById('taskForm').addEventListener('keydown', e=>{
+    if(e.key === 'Enter' && e.target.tagName !== 'TEXTAREA'){
+      e.preventDefault();
+      saveTask();
+    }
+  });
+  document.getElementById('taskForm').addEventListener('submit', e=> e.preventDefault());
+
+  document.getElementById('deleteTaskBtn').addEventListener('click', ()=>{
+    if(editingId){
+      tasks = tasks.filter(t=>t.id!==editingId);
+      persist();
+      renderAll();
+      showToast('任務已刪除');
+    }
+    closeModal();
+  });
+
+  document.getElementById('prevMonth').addEventListener('click', ()=>{
+    calDate.setMonth(calDate.getMonth()-1);
+    renderCalendar();
+  });
+  document.getElementById('nextMonth').addEventListener('click', ()=>{
+    calDate.setMonth(calDate.getMonth()+1);
+    renderCalendar();
+  });
+  document.getElementById('todayBtn').addEventListener('click', ()=>{
+    calDate = new Date();
+    renderCalendar();
+  });
+
+  function askConfirm(message){
+    return new Promise(resolve=>{
+      document.getElementById('confirmMessage').textContent = message;
+      const overlay = document.getElementById('confirmOverlay');
+      const okBtn = document.getElementById('confirmOkBtn');
+      const cancelBtn = document.getElementById('confirmCancelBtn');
+      overlay.classList.remove('hidden');
+      function cleanup(result){
+        overlay.classList.add('hidden');
+        okBtn.removeEventListener('click', onOk);
+        cancelBtn.removeEventListener('click', onCancel);
+        overlay.removeEventListener('click', onOverlay);
+        resolve(result);
+      }
+      function onOk(){ cleanup(true); }
+      function onCancel(){ cleanup(false); }
+      function onOverlay(e){ if(e.target === overlay) cleanup(false); }
+      okBtn.addEventListener('click', onOk);
+      cancelBtn.addEventListener('click', onCancel);
+      overlay.addEventListener('click', onOverlay);
+    });
+  }
+
+  document.getElementById('exportBtn').addEventListener('click', ()=>{
+    const dataStr = JSON.stringify(tasks, null, 2);
+    const blob = new Blob([dataStr], { type: 'application/json' });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `任務小窩備份_${todayStr()}.json`;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+    showToast(`已匯出 ${tasks.length} 筆任務`);
+  });
+
+  document.getElementById('importBtn').addEventListener('click', ()=>{
+    document.getElementById('importFileInput').click();
+  });
+
+  document.getElementById('importFileInput').addEventListener('change', async (e)=>{
+    const file = e.target.files[0];
+    e.target.value = '';
+    if(!file) return;
+    try{
+      const text = await file.text();
+      const imported = JSON.parse(text);
+      if(!Array.isArray(imported)) throw new Error('格式不正確');
+      const ok = await askConfirm(`這個備份檔有 ${imported.length} 筆任務，匯入後會「取代」目前畫面上所有的任務，確定要繼續嗎？`);
+      if(!ok) return;
+      tasks = imported;
+      await persist();
+      renderAll();
+      showToast('匯入成功！');
+    }catch(err){
+      showToast('匯入失敗，檔案格式不正確');
+    }
+  });
+
+  setupDropzones();
+  loadTasks();
+})();
+</script>
+</body>
+</html>
