@@ -403,6 +403,7 @@
 .task-card:active{ cursor: grabbing; }
 .task-card::before{ display:none; }
 .task-card .t-title{ font-weight:700; font-size:14px; margin-bottom:6px; padding-right: 10px; line-height:1.4; color: var(--ink); }
+.task-card.done .t-title{ text-decoration: line-through; opacity: 0.55; }
 .task-card .t-desc{ font-size:12.5px; color: var(--ink-dim); margin-bottom:8px; line-height:1.5; display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden; }
 .task-card .t-meta{ display:flex; align-items:center; gap:8px; font-family: var(--font-body); font-weight:600; font-size: 11.5px; color: var(--ink-faint); }
 .pri-dot{ width:9px; height:9px; border-radius:50%; flex-shrink:0; box-shadow: 0 0 0 3px rgba(0,0,0,0.03); }
@@ -459,6 +460,7 @@
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   border-left: 4px solid var(--ink-faint);
 }
+.cal-chip.done{ text-decoration: line-through; opacity: 0.55; }
 .cal-more{ font-family: var(--font-display); font-weight:700; font-size:10px; color: var(--ink-faint); }
 
 /* DAY PANEL */
@@ -768,7 +770,8 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     const pool = visibleTasks();
     grid.innerHTML = cells.map(c=>{
       if(c.out) return `<div class="cal-cell out"><span class="cal-daynum">${c.day}</span></div>`;
-      const dayTasks = pool.filter(t=>t.dueDate === c.dateStr);
+      const dayTasks = pool.filter(t=>t.dueDate === c.dateStr)
+        .sort((a,b)=> (a.status==='done'?1:0) - (b.status==='done'?1:0));
       const isToday = c.dateStr === today;
       const shown = dayTasks.slice(0,3);
       const more = dayTasks.length - shown.length;
@@ -779,7 +782,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       return `<div class="cal-cell ${isToday?'today':''}" data-date="${c.dateStr}">
         <span class="cal-daynum ${isHoliday?'holiday':''}">${c.day}</span>
         ${holidayName ? `<span class="holiday-label">${escapeHtml(holidayName)}</span>` : ''}
-        ${shown.map(t=>`<div class="cal-chip" style="border-left-color:${CATEGORY_COLOR[t.category || 'routine']}">${escapeHtml(t.title)}</div>`).join('')}
+        ${shown.map(t=>`<div class="cal-chip ${t.status==='done'?'done':''}" style="border-left-color:${CATEGORY_COLOR[t.category || 'routine']}">${escapeHtml(t.title)}</div>`).join('')}
         ${more>0 ? `<span class="cal-more">+${more} 更多</span>` : ''}
       </div>`;
     }).join('');
@@ -804,10 +807,11 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   }
   function renderDayPanel(dateStr){
     document.getElementById('dayPanelDate').textContent = dateStr;
-    const list = tasks.filter(t=>t.dueDate===dateStr);
+    const list = tasks.filter(t=>t.dueDate===dateStr)
+      .sort((a,b)=> (a.status==='done'?1:0) - (b.status==='done'?1:0));
     const container = document.getElementById('dayPanelList');
     container.innerHTML = list.length ? list.map(t=>`
-      <div class="task-card" data-id="${t.id}" draggable="true">
+      <div class="task-card ${t.status==='done'?'done':''}" data-id="${t.id}" draggable="true">
         <span class="cat-badge" style="background:${CATEGORY_COLOR[t.category || 'routine']}">${CATEGORY_LABEL[t.category || 'routine']}</span>
         <div class="t-title">${escapeHtml(t.title)}</div>
         <div class="t-meta">
