@@ -133,6 +133,7 @@
             <option value="routine">扣繳申報資料</option>
             <option value="labor">勞動契約</option>
             <option value="general">例行公事</option>
+            <option value="onboarding">新進追蹤</option>
           </select>
         </label>
         <label class="field">
@@ -188,6 +189,7 @@
   --cat-routine: #8FB8E8;
   --cat-labor: #C9A66B;
   --cat-general: #A8C8B0;
+  --cat-onboarding: #8E9AE8;
   --font-display: 'Baloo 2', 'Quicksand', ui-rounded, sans-serif;
   --font-body: 'Nunito', -apple-system, sans-serif;
 }
@@ -569,12 +571,12 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   const CATEGORY_LABEL = {
     perf: '績效考核', promo: '升遷制度', payroll: '薪資計算',
     medical: '臨場醫護', urgent: '突發任務', routine: '扣繳申報資料',
-    labor: '勞動契約', general: '例行公事'
+    labor: '勞動契約', general: '例行公事', onboarding: '新進追蹤'
   };
   const CATEGORY_COLOR = {
     perf: 'var(--cat-perf)', promo: 'var(--cat-promo)', payroll: 'var(--cat-payroll)',
     medical: 'var(--cat-medical)', urgent: 'var(--cat-urgent)', routine: 'var(--cat-routine)',
-    labor: 'var(--cat-labor)', general: 'var(--cat-general)'
+    labor: 'var(--cat-labor)', general: 'var(--cat-general)', onboarding: 'var(--cat-onboarding)'
   };
   let categoryFilter = 'all';
 
