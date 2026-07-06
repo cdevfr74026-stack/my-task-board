@@ -19,6 +19,7 @@
       <div class="view-toggle" id="viewToggle">
         <button class="vt-btn active" data-view="kanban">看板</button>
         <button class="vt-btn" data-view="calendar">行事曆</button>
+        <button class="vt-btn" data-view="notes">筆記</button>
       </div>
       <button class="btn-mini" id="exportBtn" title="匯出備份檔">📤 匯出</button>
       <button class="btn-mini" id="importBtn" title="匯入備份檔">📥 匯入</button>
@@ -76,6 +77,18 @@
       <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
     </div>
     <div class="cal-grid" id="calGrid"></div>
+  </main>
+
+  <!-- NOTES VIEW -->
+  <main class="view hidden" id="notesView">
+    <div class="note-composer">
+      <div class="note-composer-row">
+        <select id="note-category"></select>
+        <button class="btn-add small" id="addNoteBtn">+ 新增筆記</button>
+      </div>
+      <textarea id="note-content" rows="3" placeholder="記錄你遇到的問題、下次需要修改或注意的事項..."></textarea>
+    </div>
+    <div class="notes-list" id="notesList"></div>
   </main>
 
   <!-- DAY DETAIL PANEL -->
@@ -465,6 +478,36 @@
 .cal-chip.done{ text-decoration: line-through; opacity: 0.55; }
 .cal-more{ font-family: var(--font-display); font-weight:700; font-size:10px; color: var(--ink-faint); }
 
+/* NOTES VIEW */
+.note-composer{
+  background: var(--panel);
+  border: 3px solid var(--grid-line);
+  border-radius: 20px;
+  padding: 16px;
+  margin-bottom: 18px;
+  box-shadow: 0 6px 0 rgba(255,225,204,0.6);
+}
+.note-composer-row{ display:flex; gap:10px; margin-bottom: 10px; }
+.note-composer-row select{ flex: 1; }
+.note-composer textarea{ width: 100%; }
+.notes-list{ display:flex; flex-direction:column; gap:12px; }
+.note-card{
+  background: var(--panel-2);
+  border: 2px solid var(--grid-line);
+  border-radius: 14px;
+  padding: 13px 14px;
+  box-shadow: 0 3px 0 rgba(255,225,204,0.8);
+}
+.note-head{ display:flex; align-items:center; gap:10px; margin-bottom: 8px; }
+.note-head .cat-badge{ margin-bottom: 0; }
+.note-date{ font-family: var(--font-display); font-size: 11px; color: var(--ink-faint); }
+.note-del{
+  margin-left: auto; background: none; border: none; color: var(--ink-faint);
+  font-size: 13px; cursor: pointer; width: 24px; height: 24px; border-radius: 50%;
+}
+.note-del:hover{ color: #fff; background: var(--rose); }
+.note-content{ font-size: 13.5px; line-height: 1.6; color: var(--ink); white-space: pre-wrap; }
+
 /* DAY PANEL */
 .day-panel{
   position:fixed; top:0; right:-360px; width:340px; height:100%;
@@ -560,6 +603,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   }
 
   let tasks = [];
+  let notes = [];
   let currentView = 'kanban';
   let calDate = new Date();
   let editingId = null;
@@ -621,7 +665,9 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     }
     taskDocRef.onSnapshot(
       (snap)=>{
-        tasks = (snap.exists && snap.data().tasks) ? snap.data().tasks : [];
+        const data = snap.exists ? snap.data() : {};
+        tasks = data.tasks || [];
+        notes = data.notes || [];
         renderAll();
       },
       (err)=>{
@@ -634,7 +680,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   async function persist(){
     if(!firebaseReady) return;
     try{
-      await taskDocRef.set({ tasks });
+      await taskDocRef.set({ tasks, notes });
     }catch(e){
       console.error(e);
       showToast('儲存到雲端失敗，請重試');
@@ -654,6 +700,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     renderFilterStrip();
     renderKanban();
     renderCalendar();
+    renderNotes();
     if(dayPanelDate) renderDayPanel(dayPanelDate);
   }
 
@@ -670,6 +717,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         renderFilterStrip();
         renderKanban();
         renderCalendar();
+        renderNotes();
       });
     });
   }
@@ -861,6 +909,52 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     document.querySelectorAll('.vt-btn').forEach(b=> b.classList.toggle('active', b.dataset.view===view));
     document.getElementById('kanbanView').classList.toggle('hidden', view!=='kanban');
     document.getElementById('calendarView').classList.toggle('hidden', view!=='calendar');
+    document.getElementById('notesView').classList.toggle('hidden', view!=='notes');
+  }
+
+  function populateNoteCategorySelect(){
+    const sel = document.getElementById('note-category');
+    sel.innerHTML = Object.keys(CATEGORY_LABEL).map(k=>`<option value="${k}">${CATEGORY_LABEL[k]}</option>`).join('');
+  }
+
+  function fmtNoteDate(ts){
+    const d = new Date(ts);
+    const pad = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+  }
+
+  function noteCardHTML(n){
+    const cat = n.category || 'general';
+    return `
+      <div class="note-card" data-id="${n.id}">
+        <div class="note-head">
+          <span class="cat-badge" style="background:${CATEGORY_COLOR[cat]}">${CATEGORY_LABEL[cat]}</span>
+          <span class="note-date">${n.createdAt ? fmtNoteDate(n.createdAt) : ''}</span>
+          <button class="note-del" data-id="${n.id}" title="刪除筆記">✕</button>
+        </div>
+        <div class="note-content">${escapeHtml(n.content)}</div>
+      </div>
+    `;
+  }
+
+  function renderNotes(){
+    const list = document.getElementById('notesList');
+    const pool = categoryFilter === 'all' ? notes : notes.filter(n => (n.category || 'general') === categoryFilter);
+    const sorted = [...pool].sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
+    const emptyMsg = categoryFilter === 'all'
+      ? `<div class="empty-col">— 尚無筆記，寫下你遇到的第一個問題或注意事項吧 —</div>`
+      : `<div class="empty-col">— 「${CATEGORY_LABEL[categoryFilter] || ''}」目前沒有筆記 —</div>`;
+    list.innerHTML = sorted.length ? sorted.map(noteCardHTML).join('') : emptyMsg;
+    list.querySelectorAll('.note-del').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        notes = notes.filter(n=>n.id!==id);
+        persist();
+        renderNotes();
+        showToast('筆記已刪除');
+      });
+    });
   }
 
   // events
@@ -964,7 +1058,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   }
 
   document.getElementById('exportBtn').addEventListener('click', ()=>{
-    const dataStr = JSON.stringify(tasks, null, 2);
+    const dataStr = JSON.stringify({ tasks, notes }, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -974,7 +1068,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     a.click();
     document.body.removeChild(a);
     URL.revokeObjectURL(url);
-    showToast(`已匯出 ${tasks.length} 筆任務`);
+    showToast(`已匯出 ${tasks.length} 筆任務、${notes.length} 筆筆記`);
   });
 
   document.getElementById('importBtn').addEventListener('click', ()=>{
@@ -988,10 +1082,20 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     try{
       const text = await file.text();
       const imported = JSON.parse(text);
-      if(!Array.isArray(imported)) throw new Error('格式不正確');
-      const ok = await askConfirm(`這個備份檔有 ${imported.length} 筆任務，匯入後會「取代」目前畫面上所有的任務，確定要繼續嗎？`);
+      let importedTasks, importedNotes;
+      if(Array.isArray(imported)){
+        importedTasks = imported;
+        importedNotes = [];
+      } else if(imported && Array.isArray(imported.tasks)){
+        importedTasks = imported.tasks;
+        importedNotes = Array.isArray(imported.notes) ? imported.notes : [];
+      } else {
+        throw new Error('格式不正確');
+      }
+      const ok = await askConfirm(`這個備份檔有 ${importedTasks.length} 筆任務、${importedNotes.length} 筆筆記，匯入後會「取代」目前畫面上所有的資料，確定要繼續嗎？`);
       if(!ok) return;
-      tasks = imported;
+      tasks = importedTasks;
+      notes = importedNotes;
       await persist();
       renderAll();
       showToast('匯入成功！');
@@ -1000,6 +1104,25 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     }
   });
 
+  document.getElementById('addNoteBtn').addEventListener('click', ()=>{
+    const contentEl = document.getElementById('note-content');
+    const content = contentEl.value.trim();
+    if(!content){
+      contentEl.style.borderColor = 'var(--rose)';
+      contentEl.focus();
+      showToast('請先寫點筆記內容');
+      return;
+    }
+    contentEl.style.borderColor = '';
+    const category = document.getElementById('note-category').value;
+    notes.push({ id: uid(), content, category, createdAt: Date.now() });
+    contentEl.value = '';
+    persist();
+    renderNotes();
+    showToast('筆記已新增');
+  });
+
+  populateNoteCategorySelect();
   setupDropzones();
   loadTasks();
 })();
