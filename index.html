@@ -523,6 +523,15 @@
 }
 .note-del:hover{ color: #fff; background: var(--rose); }
 .note-content{ font-size: 13.5px; line-height: 1.6; color: var(--ink); white-space: pre-wrap; }
+.note-edit-btn{
+  background: none; border: none; color: var(--ink-faint);
+  font-size: 13px; cursor: pointer; width: 24px; height: 24px; border-radius: 50%;
+}
+.note-edit-btn:hover{ color: #fff; background: var(--coral); }
+.note-card.editing{ border-color: var(--coral); }
+.note-edit-category{ font-size: 12px; padding: 6px 8px; }
+.note-edit-textarea{ width: 100%; margin-top: 8px; font-size: 13.5px; }
+.note-edit-actions{ display:flex; justify-content:flex-end; gap:8px; margin-top: 10px; }
 
 /* DAY PANEL */
 .day-panel{
@@ -623,6 +632,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   let currentView = 'kanban';
   let calDate = new Date();
   let editingId = null;
+  let editingNoteId = null;
   let dayPanelDate = null;
 
   const PRI_COLOR = { low: 'var(--teal)', medium: 'var(--amber)', high: 'var(--rose)' };
@@ -988,11 +998,27 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
 
   function noteCardHTML(n){
     const cat = n.category || 'general';
+    if(editingNoteId === n.id){
+      const catOptions = Object.keys(CATEGORY_LABEL).map(k=>`<option value="${k}" ${k===cat?'selected':''}>${CATEGORY_LABEL[k]}</option>`).join('');
+      return `
+        <div class="note-card editing" data-id="${n.id}">
+          <div class="note-head">
+            <select class="note-edit-category" data-id="${n.id}">${catOptions}</select>
+          </div>
+          <textarea class="note-edit-textarea" data-id="${n.id}" rows="4">${escapeHtml(n.content)}</textarea>
+          <div class="note-edit-actions">
+            <button class="btn-ghost note-cancel-btn" data-id="${n.id}">取消</button>
+            <button class="btn-solid note-save-btn" data-id="${n.id}">儲存</button>
+          </div>
+        </div>
+      `;
+    }
     return `
       <div class="note-card" data-id="${n.id}">
         <div class="note-head">
           <span class="cat-badge" style="background:${CATEGORY_COLOR[cat]}">${CATEGORY_LABEL[cat]}</span>
           <span class="note-date">${n.createdAt ? fmtNoteDate(n.createdAt) : ''}</span>
+          <button class="note-edit-btn" data-id="${n.id}" title="編輯筆記">✎</button>
           <button class="note-del" data-id="${n.id}" title="刪除筆記">✕</button>
         </div>
         <div class="note-content">${escapeHtml(n.content)}</div>
@@ -1018,6 +1044,47 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         renderNotes();
         showToast('筆記已刪除');
       });
+    });
+    list.querySelectorAll('.note-edit-btn').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        editingNoteId = btn.dataset.id;
+        renderNotes();
+      });
+    });
+    list.querySelectorAll('.note-cancel-btn').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        editingNoteId = null;
+        renderNotes();
+      });
+    });
+    list.querySelectorAll('.note-save-btn').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.stopPropagation();
+        const id = btn.dataset.id;
+        const card = btn.closest('.note-card');
+        const newContent = card.querySelector('.note-edit-textarea').value.trim();
+        const newCategory = card.querySelector('.note-edit-category').value;
+        if(!newContent){
+          showToast('筆記內容不能是空的');
+          return;
+        }
+        const n = notes.find(x=>x.id===id);
+        if(n){
+          n.content = newContent;
+          n.category = newCategory;
+          n.updatedAt = Date.now();
+        }
+        editingNoteId = null;
+        persist();
+        renderNotes();
+        showToast('筆記已更新');
+      });
+    });
+    list.querySelectorAll('.note-edit-textarea').forEach(ta=>{
+      ta.focus();
+      ta.selectionStart = ta.selectionEnd = ta.value.length;
     });
   }
 
