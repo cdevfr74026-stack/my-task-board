@@ -37,6 +37,13 @@
 
   <!-- KANBAN VIEW -->
   <main class="view" id="kanbanView">
+    <div class="month-toolbar">
+      <button class="cal-nav" id="kanbanMonthPrev" aria-label="上一月">‹</button>
+      <div class="month-toolbar-label" id="kanbanMonthLabel">全部月份</div>
+      <button class="cal-nav" id="kanbanMonthNext" aria-label="下一月">›</button>
+      <button class="cal-today" id="kanbanMonthThis">本月</button>
+      <button class="cal-today" id="kanbanMonthAll">全部</button>
+    </div>
     <div class="board" id="board">
       <section class="column" data-status="todo">
         <div class="col-head">
@@ -81,6 +88,13 @@
 
   <!-- NOTES VIEW -->
   <main class="view hidden" id="notesView">
+    <div class="month-toolbar">
+      <button class="cal-nav" id="notesMonthPrev" aria-label="上一月">‹</button>
+      <div class="month-toolbar-label" id="notesMonthLabel">全部月份</div>
+      <button class="cal-nav" id="notesMonthNext" aria-label="下一月">›</button>
+      <button class="cal-today" id="notesMonthThis">本月</button>
+      <button class="cal-today" id="notesMonthAll">全部</button>
+    </div>
     <div class="note-composer">
       <div class="note-composer-row">
         <select id="note-category"></select>
@@ -479,6 +493,8 @@
 .cal-more{ font-family: var(--font-display); font-weight:700; font-size:10px; color: var(--ink-faint); }
 
 /* NOTES VIEW */
+.month-toolbar{ display:flex; align-items:center; gap:10px; margin-bottom: 16px; }
+.month-toolbar-label{ font-family: var(--font-display); font-weight:700; font-size:15px; color: var(--ink); min-width: 100px; }
 .note-composer{
   background: var(--panel);
   border: 3px solid var(--grid-line);
@@ -623,6 +639,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     labor: 'var(--cat-labor)', general: 'var(--cat-general)', onboarding: 'var(--cat-onboarding)'
   };
   let categoryFilter = 'all';
+  let recordMonth = null; // null = 全部月份；否則為 {y, m}（m 為 0-11）
 
   // 2026年（民國115年）台灣國定假日與補假資料
   const TW_HOLIDAYS = {
@@ -698,6 +715,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   function renderAll(){
     renderStats();
     renderFilterStrip();
+    renderMonthToolbars();
     renderKanban();
     renderCalendar();
     renderNotes();
@@ -724,6 +742,51 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
 
   function visibleTasks(){
     return categoryFilter === 'all' ? tasks : tasks.filter(t => t.category === categoryFilter);
+  }
+
+  function inRecordMonth(ts, rm){
+    if(!rm) return true;
+    if(!ts) return false;
+    const d = new Date(ts);
+    return d.getFullYear() === rm.y && d.getMonth() === rm.m;
+  }
+
+  function shiftRecordMonth(delta){
+    if(!recordMonth){
+      const now = new Date();
+      recordMonth = { y: now.getFullYear(), m: now.getMonth() };
+    }
+    let { y, m } = recordMonth;
+    m += delta;
+    if(m < 0){ m = 11; y -= 1; }
+    if(m > 11){ m = 0; y += 1; }
+    recordMonth = { y, m };
+    onRecordMonthChange();
+  }
+
+  function setRecordMonthThisMonth(){
+    const now = new Date();
+    recordMonth = { y: now.getFullYear(), m: now.getMonth() };
+    onRecordMonthChange();
+  }
+
+  function setRecordMonthAll(){
+    recordMonth = null;
+    onRecordMonthChange();
+  }
+
+  function onRecordMonthChange(){
+    renderMonthToolbars();
+    renderKanban();
+    renderNotes();
+  }
+
+  function renderMonthToolbars(){
+    const label = recordMonth ? `${recordMonth.y}年${recordMonth.m+1}月` : '全部月份';
+    const kL = document.getElementById('kanbanMonthLabel');
+    const nL = document.getElementById('notesMonthLabel');
+    if(kL) kL.textContent = label;
+    if(nL) nL.textContent = label;
   }
 
   function renderStats(){
@@ -766,7 +829,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   }
 
   function renderKanban(){
-    const pool = visibleTasks();
+    const pool = visibleTasks().filter(t => inRecordMonth(t.createdAt, recordMonth));
     ['todo','doing','done'].forEach(status=>{
       const list = pool.filter(t=>t.status===status).sort((a,b)=> (a.dueDate||'9999').localeCompare(b.dueDate||'9999'));
       document.getElementById('count-'+status).textContent = list.length;
@@ -939,7 +1002,8 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
 
   function renderNotes(){
     const list = document.getElementById('notesList');
-    const pool = categoryFilter === 'all' ? notes : notes.filter(n => (n.category || 'general') === categoryFilter);
+    let pool = categoryFilter === 'all' ? notes : notes.filter(n => (n.category || 'general') === categoryFilter);
+    pool = pool.filter(n => inRecordMonth(n.createdAt, recordMonth));
     const sorted = [...pool].sort((a,b)=> (b.createdAt||0) - (a.createdAt||0));
     const emptyMsg = categoryFilter === 'all'
       ? `<div class="empty-col">— 尚無筆記，寫下你遇到的第一個問題或注意事項吧 —</div>`
@@ -1121,6 +1185,15 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     renderNotes();
     showToast('筆記已新增');
   });
+
+  document.getElementById('kanbanMonthPrev').addEventListener('click', ()=> shiftRecordMonth(-1));
+  document.getElementById('kanbanMonthNext').addEventListener('click', ()=> shiftRecordMonth(1));
+  document.getElementById('kanbanMonthThis').addEventListener('click', setRecordMonthThisMonth);
+  document.getElementById('kanbanMonthAll').addEventListener('click', setRecordMonthAll);
+  document.getElementById('notesMonthPrev').addEventListener('click', ()=> shiftRecordMonth(-1));
+  document.getElementById('notesMonthNext').addEventListener('click', ()=> shiftRecordMonth(1));
+  document.getElementById('notesMonthThis').addEventListener('click', setRecordMonthThisMonth);
+  document.getElementById('notesMonthAll').addEventListener('click', setRecordMonthAll);
 
   populateNoteCategorySelect();
   setupDropzones();
