@@ -6,9 +6,26 @@
 <title>我的任務小窩</title>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-auth-compat.js"></script>
 </head>
 <body>
-<div class="app">
+<div class="login-overlay" id="loginOverlay">
+  <div class="login-box">
+    <span class="eyebrow">🍑 小任務日記</span>
+    <h1 class="login-title">我的任務小窩</h1>
+    <div class="field">
+      <span>帳號</span>
+      <input type="email" id="login-email" placeholder="you@example.com" autocomplete="username">
+    </div>
+    <div class="field">
+      <span>密碼</span>
+      <input type="password" id="login-password" placeholder="請輸入密碼" autocomplete="current-password">
+    </div>
+    <div class="login-error hidden" id="loginError"></div>
+    <button type="button" class="btn-solid login-submit" id="loginSubmitBtn">登入</button>
+  </div>
+</div>
+<div class="app hidden" id="appRoot">
   <div class="grain"></div>
   <header class="topbar">
     <div class="brand">
@@ -24,6 +41,7 @@
       <button class="btn-mini" id="exportBtn" title="匯出備份檔">📤 匯出</button>
       <button class="btn-mini" id="importBtn" title="匯入備份檔">📥 匯入</button>
       <input type="file" id="importFileInput" accept="application/json,.json" style="display:none">
+      <button class="btn-mini" id="logoutBtn" title="登出">🔒 登出</button>
       <button class="btn-add" id="openAddBtn">
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
         新增任務
@@ -562,6 +580,27 @@
 .modal-head{ margin-bottom: 16px; }
 .modal-head h3{ margin:0; font-family: var(--font-display); font-size:20px; color: var(--ink); }
 .field{ display:flex; flex-direction:column; gap:6px; margin-bottom:14px; }
+
+.login-overlay{
+  position:fixed; inset:0; z-index: 100;
+  background:
+    radial-gradient(circle at 8% 12%, rgba(255,196,163,0.35) 0, transparent 40%),
+    radial-gradient(circle at 92% 8%, rgba(201,174,232,0.3) 0, transparent 38%),
+    radial-gradient(circle at 85% 90%, rgba(143,214,148,0.25) 0, transparent 40%),
+    radial-gradient(circle at 10% 88%, rgba(255,193,94,0.28) 0, transparent 40%),
+    var(--bg);
+  display:flex; align-items:center; justify-content:center;
+}
+.login-overlay.hidden{ display:none; }
+.login-box{
+  background: var(--panel); border: 3px solid var(--grid-line); border-radius: 24px;
+  width: 340px; max-width: 88vw; padding: 30px 28px;
+  box-shadow: 0 12px 0 rgba(255,225,204,0.6);
+}
+.login-title{ font-family: var(--font-display); font-size: 24px; margin: 0 0 22px; color: var(--ink); }
+.login-error{ font-size: 12.5px; color: var(--rose); font-weight: 700; margin-bottom: 12px; }
+.login-error.hidden{ display:none; }
+.login-submit{ width: 100%; text-align:center; }
 .field span{ font-size:12.5px; color: var(--ink-dim); font-weight:700; }
 .field-row{ display:flex; gap:12px; }
 .field-row .field{ flex:1; }
@@ -617,11 +656,14 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
 
   let db = null;
   let taskDocRef = null;
+  let auth = null;
   let firebaseReady = false;
+  let unsubscribeSnapshot = null;
   try{
     firebase.initializeApp(firebaseConfig);
     db = firebase.firestore();
     taskDocRef = db.collection('taskboard').doc('data');
+    auth = firebase.auth();
     firebaseReady = true;
   }catch(e){
     console.error('Firebase 初始化失敗', e);
@@ -691,7 +733,8 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       renderAll();
       return;
     }
-    taskDocRef.onSnapshot(
+    if(unsubscribeSnapshot) return;
+    unsubscribeSnapshot = taskDocRef.onSnapshot(
       (snap)=>{
         const data = snap.exists ? snap.data() : {};
         tasks = data.tasks || [];
@@ -703,6 +746,15 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         showToast('讀取雲端資料失敗，請檢查網路或 Firebase 設定');
       }
     );
+  }
+
+  function stopLoadingTasks(){
+    if(unsubscribeSnapshot){
+      unsubscribeSnapshot();
+      unsubscribeSnapshot = null;
+    }
+    tasks = [];
+    notes = [];
   }
 
   async function persist(){
@@ -1275,9 +1327,62 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   document.getElementById('notesMonthThis').addEventListener('click', setRecordMonthThisMonth);
   document.getElementById('notesMonthAll').addEventListener('click', setRecordMonthAll);
 
+  function doLogin(){
+    const email = document.getElementById('login-email').value.trim();
+    const password = document.getElementById('login-password').value;
+    const errEl = document.getElementById('loginError');
+    errEl.classList.add('hidden');
+    if(!firebaseReady || !auth){
+      errEl.textContent = '⚠️ 尚未設定 Firebase，請聯絡管理者';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    if(!email || !password){
+      errEl.textContent = '請輸入帳號和密碼';
+      errEl.classList.remove('hidden');
+      return;
+    }
+    auth.signInWithEmailAndPassword(email, password).catch(()=>{
+      errEl.textContent = '帳號或密碼錯誤，請再試一次';
+      errEl.classList.remove('hidden');
+    });
+  }
+
+  document.getElementById('loginSubmitBtn').addEventListener('click', doLogin);
+  document.getElementById('loginError').addEventListener('click', ()=>{});
+  document.getElementById('login-password').addEventListener('keydown', e=>{
+    if(e.key === 'Enter'){ e.preventDefault(); doLogin(); }
+  });
+  document.getElementById('login-email').addEventListener('keydown', e=>{
+    if(e.key === 'Enter'){ e.preventDefault(); doLogin(); }
+  });
+
+  document.getElementById('logoutBtn').addEventListener('click', ()=>{
+    if(auth) auth.signOut();
+  });
+
+  if(firebaseReady && auth){
+    auth.onAuthStateChanged((user)=>{
+      if(user){
+        document.getElementById('loginOverlay').classList.add('hidden');
+        document.getElementById('appRoot').classList.remove('hidden');
+        document.getElementById('login-email').value = '';
+        document.getElementById('login-password').value = '';
+        document.getElementById('loginError').classList.add('hidden');
+        loadTasks();
+      } else {
+        document.getElementById('loginOverlay').classList.remove('hidden');
+        document.getElementById('appRoot').classList.add('hidden');
+        stopLoadingTasks();
+      }
+    });
+  } else {
+    document.getElementById('loginError').textContent = '⚠️ 尚未設定 Firebase，請聯絡管理者設定 firebaseConfig';
+    document.getElementById('loginError').classList.remove('hidden');
+  }
+
   populateNoteCategorySelect();
   setupDropzones();
-  loadTasks();
 })();
 </script>
 </body>
