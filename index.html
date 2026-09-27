@@ -34,7 +34,7 @@
     </div>
     <div class="controls">
       <div class="view-toggle" id="viewToggle">
-        <button class="vt-btn active" data-view="kanban">看板</button>
+        <button class="vt-btn active" data-view="kanban">清單</button>
         <button class="vt-btn" data-view="calendar">行事曆</button>
         <button class="vt-btn" data-view="notes">筆記</button>
       </div>
@@ -53,41 +53,15 @@
 
   <div class="filter-strip" id="filterStrip"></div>
 
-  <!-- KANBAN VIEW -->
+  <!-- CHECKLIST VIEW -->
   <main class="view" id="kanbanView">
     <div class="month-toolbar">
-      <button class="cal-nav" id="kanbanMonthPrev" aria-label="上一月">‹</button>
-      <div class="month-toolbar-label" id="kanbanMonthLabel">全部月份</div>
-      <button class="cal-nav" id="kanbanMonthNext" aria-label="下一月">›</button>
-      <button class="cal-today" id="kanbanMonthThis">本月</button>
-      <button class="cal-today" id="kanbanMonthAll">全部</button>
+      <button class="cal-nav" id="checklistMonthPrev" aria-label="上一月">‹</button>
+      <div class="month-toolbar-label" id="checklistMonthLabel">—</div>
+      <button class="cal-nav" id="checklistMonthNext" aria-label="下一月">›</button>
+      <button class="cal-today" id="checklistMonthThis">本月</button>
     </div>
-    <div class="board" id="board">
-      <section class="column" data-status="todo">
-        <div class="col-head">
-          <span class="col-tick">01</span>
-          <h2>待辦</h2>
-          <span class="col-count" id="count-todo">0</span>
-        </div>
-        <div class="col-body" data-dropzone="todo" id="list-todo"></div>
-      </section>
-      <section class="column" data-status="doing">
-        <div class="col-head">
-          <span class="col-tick">02</span>
-          <h2>進行中</h2>
-          <span class="col-count" id="count-doing">0</span>
-        </div>
-        <div class="col-body" data-dropzone="doing" id="list-doing"></div>
-      </section>
-      <section class="column" data-status="done">
-        <div class="col-head">
-          <span class="col-tick">03</span>
-          <h2>已完成</h2>
-          <span class="col-count" id="count-done">0</span>
-        </div>
-        <div class="col-body" data-dropzone="done" id="list-done"></div>
-      </section>
-    </div>
+    <div class="checklist-container" id="checklistContainer"></div>
   </main>
 
   <!-- CALENDAR VIEW -->
@@ -131,6 +105,18 @@
     </div>
     <div class="day-panel-list" id="dayPanelList"></div>
     <button class="btn-add small" id="dayPanelAdd">+ 在此日新增任務</button>
+  </div>
+
+  <!-- STATS LIST PANEL（完成／逾期清單） -->
+  <div class="day-panel stats-panel" id="statsPanel">
+    <div class="day-panel-head">
+      <div>
+        <span class="eyebrow" id="statsPanelEyebrow">—</span>
+        <h3 class="stats-panel-title" id="statsPanelTitle">—</h3>
+      </div>
+      <button class="icon-btn" id="closeStatsPanel">✕</button>
+    </div>
+    <div class="day-panel-list" id="statsPanelList"></div>
   </div>
 
   <!-- MODAL -->
@@ -371,8 +357,23 @@
 }
 .stat-chip b{ color: var(--ink); font-size: 14px; }
 .stat-dot{ width:8px; height:8px; border-radius:50%; }
+button.stat-chip{ cursor:pointer; transition: all .15s ease; }
+.stat-chip.clickable:hover{ border-color: var(--coral); color: var(--ink); transform: translateY(-1px); }
+.stat-chip.clickable.active{ border-color: var(--coral); background: #FFF0EA; color: var(--ink); }
+.stats-panel{ width: 380px; right: -400px; }
+.stats-panel-title{ font-family: var(--font-display); font-size:18px; margin:0; color: var(--ink); }
+.stats-panel .task-card{ cursor:pointer; }
+.sp-dates{ display:flex; flex-wrap:wrap; gap:6px; }
+.sp-date{
+  font-family: var(--font-display); font-weight:700; font-size:11px;
+  background: var(--panel); color: var(--ink-dim); border-radius:999px; padding:2px 9px;
+}
+.sp-date.done{ color:#5FA868; background: rgba(143,214,148,0.22); }
+.sp-date.overdue{ color:#fff; background: var(--rose); }
+.stats-panel .task-card.done .sp-date{ opacity: 1; }
 
 .filter-strip{ display:flex; gap:8px; margin-bottom: 20px; flex-wrap:wrap; }
+.filter-strip.hidden{ display:none; }
 .filter-chip{
   font-family: var(--font-display);
   font-weight: 700;
@@ -507,7 +508,18 @@
   white-space:nowrap; overflow:hidden; text-overflow:ellipsis;
   border-left: 4px solid var(--ink-faint);
 }
-.cal-chip.done{ text-decoration: line-through; opacity: 0.55; }
+.cal-chip{ display:flex; align-items:center; gap:4px; }
+.cal-chip-title{ flex:1; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.cal-chip.done{ opacity: 0.55; }
+.cal-chip.done .cal-chip-title{ text-decoration: line-through; }
+.task-done-cb{
+  width:13px; height:13px; flex-shrink:0; margin:0; padding:0;
+  accent-color: var(--coral); cursor:pointer;
+}
+.cal-chip .check-date{ font-size:9.5px; padding:1px 5px; }
+.t-title-row{ display:flex; align-items:center; gap:8px; margin-bottom:6px; }
+.t-title-row .t-title{ margin-bottom:0; flex:1; }
+.t-title-row .task-done-cb{ width:17px; height:17px; }
 .cal-more{ font-family: var(--font-display); font-weight:700; font-size:10px; color: var(--ink-faint); }
 
 /* NOTES VIEW */
@@ -633,11 +645,104 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
 }
 .toast.show{ opacity:1; transform: translateX(-50%) translateY(0); }
 
+/* CHECKLIST VIEW */
+.checklist-container{ display:flex; flex-direction:column; gap:18px; }
+.checklist-section{
+  background: var(--panel);
+  border: 3px solid var(--grid-line);
+  border-radius: 20px;
+  padding: 16px 18px;
+  box-shadow: 0 6px 0 rgba(255,225,204,0.6);
+}
+.checklist-section-head{ display:flex; align-items:center; gap:10px; margin-bottom: 12px; flex-wrap:wrap; }
+.checklist-section-head h3{ font-family: var(--font-display); font-size:16px; margin:0; color: var(--ink); flex:1; }
+.checklist-progress{
+  font-family: var(--font-display); font-weight:700; font-size:12px; color: var(--coral);
+  background: var(--panel-2); border-radius: 999px; padding: 3px 10px;
+}
+.checklist-items{ display:flex; flex-direction:column; gap:8px; }
+.check-item{
+  display:flex; align-items:center; gap:10px;
+  background: var(--panel-2); border: 2px solid var(--grid-line); border-radius: 12px;
+  padding: 9px 12px; cursor:pointer; transition: all .12s ease;
+}
+.check-item:hover{ border-color: var(--coral); }
+.check-item input[type="checkbox"]{ width:18px; height:18px; flex-shrink:0; accent-color: var(--coral); cursor:pointer; padding:0; }
+.check-item-text{ flex:1; font-size:13.5px; font-weight:600; color: var(--ink); line-height:1.5; }
+.check-item.checked{ opacity:0.55; }
+.check-item.checked .check-item-text{ text-decoration: line-through; }
+.check-item-actions{ display:flex; gap:4px; flex-shrink:0; }
+.check-date{
+  flex-shrink:0; font-family: var(--font-display); font-weight:700; font-size:11px;
+  color: #5FA868; background: rgba(143,214,148,0.22); border-radius:999px; padding:2px 8px;
+  white-space:nowrap;
+}
+.check-item.checked .check-date{ opacity:1; }
+.check-item-edit-btn, .check-item-del-btn{
+  background:none; border:none; color: var(--ink-faint); font-size:12px; cursor:pointer;
+  width:22px; height:22px; border-radius:50%;
+}
+.check-item-edit-btn:hover{ color:#fff; background: var(--coral); }
+.check-item-del-btn:hover{ color:#fff; background: var(--rose); }
+.check-item.editing{ flex-direction:column; align-items:stretch; cursor:default; border-color: var(--coral); }
+.check-item.editing .edit-item-text{ width:100%; margin-bottom:8px; }
+
+.checklist-item-form{
+  background: var(--panel-2); border: 2px dashed var(--coral); border-radius: 14px;
+  padding: 12px 14px; margin-bottom: 12px; display:flex; flex-direction:column; gap:8px;
+}
+.checklist-item-form input[type="text"], .checklist-item-form select{ width:100%; }
+.checklist-item-form-actions{ display:flex; justify-content:flex-end; gap:8px; }
+.month-picker-label{ font-size:11.5px; color: var(--ink-dim); font-weight:700; }
+.month-check-grid{ display:grid; grid-template-columns: repeat(6,1fr); gap:6px; }
+.month-check-opt{
+  display:flex; align-items:center; gap:4px; font-size:11.5px; font-weight:600; color: var(--ink-dim);
+  background: var(--panel); border:1px solid var(--grid-line); border-radius:8px; padding:5px 6px; cursor:pointer;
+}
+.month-check-opt input{ width:14px; height:14px; accent-color: var(--coral); }
+
+.person-list{ display:flex; flex-direction:column; gap:12px; }
+.person-card{
+  background: var(--panel-2); border: 2px solid var(--grid-line); border-radius: 14px; padding: 12px 14px;
+}
+.person-card.editing{ border-color: var(--coral); display:flex; flex-direction:column; gap:8px; }
+.person-card.editing input[type="text"], .person-card.editing select{ width:100%; }
+.person-card-head{ display:flex; align-items:center; gap:8px; margin-bottom:10px; flex-wrap:wrap; }
+.person-name{ font-family: var(--font-display); font-weight:700; font-size:14px; color: var(--ink); flex:1; }
+.person-edit-btn, .person-del-btn{
+  background:none; border:none; color: var(--ink-faint); font-size:12px; cursor:pointer;
+  width:24px; height:24px; border-radius:50%;
+}
+.person-edit-btn:hover{ color:#fff; background: var(--coral); }
+.person-del-btn:hover{ color:#fff; background: var(--rose); }
+.section-toggle-btn{
+  background:none; border:none; color: var(--coral); font-size:16px; cursor:pointer;
+  width:26px; height:26px; border-radius:50%; padding:0; line-height:1;
+  display:inline-flex; align-items:center; justify-content:center; flex-shrink:0;
+  transition: transform .18s ease, background .15s ease;
+}
+.section-toggle-btn:hover{ background: var(--panel-2); }
+.checklist-section.collapsed .section-toggle-btn{ transform: rotate(-90deg); }
+.checklist-section.collapsed .checklist-section-body{ display:none; }
+.checklist-section.collapsed .checklist-section-head{ margin-bottom:0; }
+.person-toggle-btn{
+  background:none; border:none; color: var(--coral); font-size:14px; cursor:pointer;
+  width:24px; height:24px; border-radius:50%; padding:0; line-height:1;
+  display:inline-flex; align-items:center; justify-content:center;
+  transition: transform .18s ease, background .15s ease;
+}
+.person-toggle-btn:hover{ background: var(--panel); }
+.person-card.collapsed .person-toggle-btn{ transform: rotate(-90deg); }
+.person-card.collapsed .person-card-head{ margin-bottom:0; }
+.person-card .pitem-add-btn{ margin-top:10px; width:100%; }
+.person-card .checklist-item-form{ margin: 10px 0 0; }
+
 @media (max-width: 760px){
   .board{ grid-template-columns: 1fr; }
   .app{ padding: 18px 16px 40px; }
-  .day-panel{ width: 88vw; right: -100vw; }
+  .day-panel, .stats-panel{ width: 88vw; right: -100vw; }
   .cal-cell{ min-height: 70px; }
+  .month-check-grid{ grid-template-columns: repeat(4,1fr); }
 }
 </style>
 
@@ -676,6 +781,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   let editingId = null;
   let editingNoteId = null;
   let dayPanelDate = null;
+  let statsPanelMode = null; // 'done' | 'overdue' | null
 
   const PRI_COLOR = { low: 'var(--teal)', medium: 'var(--amber)', high: 'var(--rose)' };
   const PRI_LABEL = { low: '低', medium: '中', high: '高' };
@@ -693,6 +799,45 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   };
   let categoryFilter = 'all';
   let recordMonth = null; // null = 全部月份；否則為 {y, m}（m 為 0-11）
+
+  // ====== 月度檢核清單（薪資計算／臨場醫護／其他事項／新進人員／離職人員） ======
+  let checklistItems = [];
+  let checklistChecks = {};
+  let newHires = [];
+  let departures = [];
+  let checklistMonth = (()=>{ const n = new Date(); return { y: n.getFullYear(), m: n.getMonth()+1 }; })();
+  let editingChecklistItemId = null;
+  let editingHireId = null;
+  let editingDepartureId = null;
+  let addingItemSection = null;
+  let addingHire = false;
+  let addingDeparture = false;
+  let collapsedSections = {}; // { payroll: true, ... }
+  let editingPersonItem = null; // { personId, itemId }
+  let addingPersonItemFor = null; // personId
+
+  const SECTION_LABEL = { payroll: '💰&nbsp;&nbsp;薪資計算', medical: '🏥&nbsp;&nbsp;臨場醫護', other: '📌&nbsp;&nbsp;其他事項' };
+  const NEWHIRE_TEMPLATES = {
+    project: ['104薪資規則＋加保勞健保設定','健檢報告紀錄','擬定勞動契約（定期）','擬定專案契約（定期）','歸檔勞動契約（定期）','歸檔專案契約（定期）','人事資料套表'],
+    general: ['104薪資規則＋加保勞健保設定','健檢報告','擬定勞動契約（不定期）','歸檔勞動契約（不定期）','人事資料套表']
+  };
+  const DEPARTURE_TEMPLATE = ['104離職作業＋退保勞健保','離職申請單紙本'];
+
+  function defaultChecklistItems(){
+    const payrollTexts = ['核對勞健保＋補充保費','印補充保費繳費單＋支出申請單','印健保繳費單＋支出申請單','收集勞保、勞退帳單＋印支出申請單','印勞退（舊制）支出申請單＋寫繳費單','需調整勞健保填入EXCEL薪資＋104後台','製造部工時表','儀電部工時表','工務部工時表','南區工時表','加班費計算＋分攤勞務成本','事病假計算','下載104薪資表核對薪資EXCEL','印所得稅繳費單','給俐君薪資套表','轉薪資媒體檔','給于瑄勞健保帳單＋薪資媒體檔','給筱雅舊制勞退＋所得稅單'];
+    const medicalTexts = ['第一次訪談人員名單','護理師第一次來訪','第二次訪談人員名單','護理師第二次來訪','雲端紀錄名單'];
+    return [
+      ...payrollTexts.map((text,i)=>({ id: 'p'+(i+1), section: 'payroll', text, months: null })),
+      ...medicalTexts.map((text,i)=>({ id: 'm'+(i+1), section: 'medical', text, months: null })),
+      { id: 'o1', section: 'other', text: '執行命令支出單申請', months: [12,3,6,9] },
+      { id: 'o2', section: 'other', text: '臨場醫護費用請款＋支出申請單', months: [10,1,4,9] },
+      { id: 'o3', section: 'other', text: '臨場醫護資格申請', months: [2] },
+      { id: 'o4', section: 'other', text: '臨場補助第一階段申請', months: [3] },
+      { id: 'o5', section: 'other', text: '臨場補助第二階段申請', months: [8] },
+    ];
+  }
+
+  function monthKey(y, m){ return y + '-' + m; }
 
   // 2026年（民國115年）台灣國定假日與補假資料
   const TW_HOLIDAYS = {
@@ -739,6 +884,16 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         const data = snap.exists ? snap.data() : {};
         tasks = data.tasks || [];
         notes = data.notes || [];
+        newHires = data.newHires || [];
+        departures = data.departures || [];
+        checklistChecks = data.checklistChecks || {};
+        collapsedSections = data.collapsedSections || {};
+        if(Array.isArray(data.checklistItems) && data.checklistItems.length){
+          checklistItems = data.checklistItems;
+        } else {
+          checklistItems = defaultChecklistItems();
+          persist();
+        }
         renderAll();
       },
       (err)=>{
@@ -755,12 +910,17 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     }
     tasks = [];
     notes = [];
+    newHires = [];
+    departures = [];
+    checklistItems = [];
+    checklistChecks = {};
+    collapsedSections = {};
   }
 
   async function persist(){
     if(!firebaseReady) return;
     try{
-      await taskDocRef.set({ tasks, notes });
+      await taskDocRef.set({ tasks, notes, checklistItems, checklistChecks, newHires, departures, collapsedSections });
     }catch(e){
       console.error(e);
       showToast('儲存到雲端失敗，請重試');
@@ -779,10 +939,89 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     renderStats();
     renderFilterStrip();
     renderMonthToolbars();
-    renderKanban();
+    renderChecklistView();
     renderCalendar();
     renderNotes();
     if(dayPanelDate) renderDayPanel(dayPanelDate);
+    if(statsPanelMode) renderStatsPanel();
+  }
+
+  // ====== 完成／逾期清單面板 ======
+  function daysBetween(fromStr, toStr){
+    const a = new Date(fromStr + 'T00:00:00'), b = new Date(toStr + 'T00:00:00');
+    return Math.round((b - a) / 86400000);
+  }
+  function fmtFullDate(str){
+    if(!str) return '';
+    const [y,m,d] = str.split('-');
+    return `${y}/${m}/${d}`;
+  }
+  function fmtTsDate(ts){
+    const d = new Date(ts), pad = n => String(n).padStart(2,'0');
+    return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())}`;
+  }
+
+  function openStatsPanel(mode){
+    statsPanelMode = mode;
+    // 避免兩個側欄疊在一起
+    document.getElementById('dayPanel').classList.remove('open');
+    dayPanelDate = null;
+    renderStats();
+    renderStatsPanel();
+    document.getElementById('statsPanel').classList.add('open');
+  }
+  function closeStatsPanel(){
+    statsPanelMode = null;
+    document.getElementById('statsPanel').classList.remove('open');
+    renderStats();
+  }
+
+  function renderStatsPanel(){
+    const today = todayStr();
+    let list, eyebrow, title, empty;
+    if(statsPanelMode === 'done'){
+      list = tasks.filter(t=>t.status==='done')
+        .sort((a,b)=> (b.doneAt||0) - (a.doneAt||0) || (b.dueDate||'').localeCompare(a.dueDate||''));
+      eyebrow = '✅ DONE';
+      title = `已完成 ${list.length} 項`;
+      empty = '— 目前還沒有完成的任務 —';
+    } else {
+      list = tasks.filter(t=> t.dueDate && t.dueDate < today && t.status !== 'done')
+        .sort((a,b)=> a.dueDate.localeCompare(b.dueDate));
+      eyebrow = '⏰ OVERDUE';
+      title = `逾期 ${list.length} 項`;
+      empty = '— 太棒了，沒有逾期任務 🎉 —';
+    }
+    document.getElementById('statsPanelEyebrow').textContent = eyebrow;
+    document.getElementById('statsPanelTitle').textContent = title;
+    const container = document.getElementById('statsPanelList');
+    container.innerHTML = list.length ? list.map(t=>{
+      const cat = t.category || 'routine';
+      const isDone = t.status === 'done';
+      let dateInfo = '';
+      if(isDone){
+        dateInfo = `
+          <span class="sp-date done">完成 ${t.doneAt ? fmtTsDate(t.doneAt) : '（未記錄）'}</span>
+          ${t.dueDate ? `<span class="sp-date">截止 ${fmtFullDate(t.dueDate)}</span>` : ''}`;
+      } else {
+        dateInfo = `
+          <span class="sp-date">截止 ${fmtFullDate(t.dueDate)}</span>
+          <span class="sp-date overdue">逾期 ${daysBetween(t.dueDate, today)} 天</span>`;
+      }
+      return `
+        <div class="task-card ${isDone?'done':''}" data-id="${t.id}">
+          <span class="cat-badge" style="background:${CATEGORY_COLOR[cat]}">${CATEGORY_LABEL[cat]}</span>
+          <div class="t-title-row">
+            <input type="checkbox" class="task-done-cb" data-id="${t.id}" ${isDone?'checked':''} title="${isDone?'取消完成':'標記為完成'}">
+            <div class="t-title">${escapeHtml(t.title)}</div>
+          </div>
+          <div class="sp-dates">${dateInfo}</div>
+        </div>`;
+    }).join('') : `<div class="empty-col">${empty}</div>`;
+    container.querySelectorAll('.task-card').forEach(card=>{
+      card.addEventListener('click', ()=> openModal(card.dataset.id));
+    });
+    wireTaskDoneCheckboxes(container);
   }
 
   function renderFilterStrip(){
@@ -840,7 +1079,6 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
 
   function onRecordMonthChange(){
     renderMonthToolbars();
-    renderKanban();
     renderNotes();
   }
 
@@ -859,9 +1097,15 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     const overdue = tasks.filter(t=> t.dueDate && t.dueDate < todayStr() && t.status !== 'done').length;
     strip.innerHTML = `
       <div class="stat-chip">總計 <b>${total}</b></div>
-      <div class="stat-chip"><span class="stat-dot" style="background:var(--green)"></span>完成 <b>${done}</b></div>
-      <div class="stat-chip"><span class="stat-dot" style="background:var(--rose)"></span>逾期 <b>${overdue}</b></div>
+      <button type="button" class="stat-chip clickable ${statsPanelMode==='done'?'active':''}" data-stat="done" title="查看已完成清單"><span class="stat-dot" style="background:var(--green)"></span>完成 <b>${done}</b></button>
+      <button type="button" class="stat-chip clickable ${statsPanelMode==='overdue'?'active':''}" data-stat="overdue" title="查看逾期清單"><span class="stat-dot" style="background:var(--rose)"></span>逾期 <b>${overdue}</b></button>
     `;
+    strip.querySelectorAll('.stat-chip.clickable').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        if(statsPanelMode === btn.dataset.stat) closeStatsPanel();
+        else openStatsPanel(btn.dataset.stat);
+      });
+    });
   }
 
   function fmtDue(d){
@@ -891,40 +1135,502 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     return (s||'').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
   }
 
-  function renderKanban(){
-    const pool = visibleTasks().filter(t => inRecordMonth(t.createdAt, recordMonth));
-    ['todo','doing','done'].forEach(status=>{
-      const list = pool.filter(t=>t.status===status).sort((a,b)=>{
-        const pd = (PRI_ORDER[a.priority] ?? 1) - (PRI_ORDER[b.priority] ?? 1);
-        if(pd !== 0) return pd;
-        return (a.dueDate||'9999').localeCompare(b.dueDate||'9999');
-      });
-      document.getElementById('count-'+status).textContent = list.length;
-      const container = document.getElementById('list-'+status);
-      container.innerHTML = list.length ? list.map(taskCardHTML).join('') : `<div class="empty-col">— 尚無任務 —</div>`;
+  // ====== 月度檢核清單：渲染 ======
+  function monthCheckboxesHTML(selectedMonths, prefix){
+    selectedMonths = selectedMonths || [];
+    let html = '<div class="month-picker-label">套用月份（不勾選＝每月都顯示）：</div><div class="month-check-grid">';
+    for(let mo=1; mo<=12; mo++){
+      html += `<label class="month-check-opt"><input type="checkbox" class="${prefix}-month-cb" value="${mo}" ${selectedMonths.includes(mo)?'checked':''}>${mo}月</label>`;
+    }
+    html += '</div>';
+    return html;
+  }
+
+  function addItemFormHTML(section){
+    return `
+      <div class="checklist-item-form" data-section="${section}">
+        <input type="text" class="new-item-text" placeholder="輸入項目名稱">
+        ${section==='other' ? monthCheckboxesHTML([], 'newitem') : ''}
+        <div class="checklist-item-form-actions">
+          <button class="btn-ghost item-cancel-btn" data-section="${section}">取消</button>
+          <button class="btn-solid item-save-btn" data-section="${section}">新增</button>
+        </div>
+      </div>
+    `;
+  }
+
+  // 勾選值：數字＝勾選時間戳；true＝舊資料（無日期）
+  function checkedDateHTML(val){
+    if(typeof val !== 'number') return '';
+    const d = new Date(val);
+    return `<span class="check-date" title="${fmtNoteDate(val)} 完成">✓ ${d.getMonth()+1}/${d.getDate()}</span>`;
+  }
+
+  function checklistItemHTML(it, checkVal){
+    const checked = !!checkVal;
+    if(editingChecklistItemId === it.id){
+      return `
+        <div class="check-item editing" data-id="${it.id}">
+          <input type="text" class="edit-item-text" value="${escapeHtml(it.text)}">
+          ${it.section==='other' ? monthCheckboxesHTML(it.months, 'edititem') : ''}
+          <div class="checklist-item-form-actions">
+            <button class="btn-ghost item-edit-cancel-btn" data-id="${it.id}">取消</button>
+            <button class="btn-solid item-edit-save-btn" data-id="${it.id}">儲存</button>
+          </div>
+        </div>
+      `;
+    }
+    return `
+      <label class="check-item ${checked?'checked':''}">
+        <input type="checkbox" class="check-item-cb" data-id="${it.id}" ${checked?'checked':''}>
+        <span class="check-item-text">${escapeHtml(it.text)}</span>
+        ${checkedDateHTML(checkVal)}
+        <span class="check-item-actions">
+          <button class="check-item-edit-btn" type="button" data-id="${it.id}" title="編輯">✎</button>
+          <button class="check-item-del-btn" type="button" data-id="${it.id}" title="刪除">✕</button>
+        </span>
+      </label>
+    `;
+  }
+
+  function sectionToggleHTML(key){
+    const c = !!collapsedSections[key];
+    return `<button class="section-toggle-btn" type="button" data-section-key="${key}" title="${c?'展開':'收起'}" aria-expanded="${!c}">▾</button>`;
+  }
+
+  function checklistSectionHTML(section){
+    const items = checklistItems.filter(it=>it.section===section)
+      .filter(it=> !it.months || it.months.includes(checklistMonth.m));
+    const checks = checklistChecks[monthKey(checklistMonth.y, checklistMonth.m)] || {};
+    const doneCount = items.filter(it=>checks[it.id]).length;
+    return `
+      <div class="checklist-section ${collapsedSections[section]?'collapsed':''}">
+        <div class="checklist-section-head">
+          ${sectionToggleHTML(section)}
+          <h3>${SECTION_LABEL[section]}</h3>
+          <span class="checklist-progress">${doneCount}/${items.length}</span>
+          <button class="btn-mini checklist-add-btn" data-section="${section}">＋ 新增項目</button>
+        </div>
+        <div class="checklist-section-body">
+          ${addingItemSection===section ? addItemFormHTML(section) : ''}
+          <div class="checklist-items">
+            ${items.length ? items.map(it=> checklistItemHTML(it, checks[it.id])).join('') : '<div class="empty-col">— 本月尚無項目 —</div>'}
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
+  // 每位人員有自己的細項清單（可編輯）；舊資料沒有 items 時，從範本轉換
+  function templateItems(kind, type){
+    const tpl = kind==='hire' ? NEWHIRE_TEMPLATES[type||'general'] : DEPARTURE_TEMPLATE;
+    return tpl.map(text=>({ id: uid(), text }));
+  }
+  function ensurePersonItems(person, kind){
+    if(Array.isArray(person.items)) return person.items;
+    const tpl = kind==='hire' ? NEWHIRE_TEMPLATES[person.type||'general'] : DEPARTURE_TEMPLATE;
+    const oldChecks = person.checks || {};
+    const newChecks = {};
+    person.items = tpl.map((text,i)=>{
+      const id = 'i'+i;
+      if(oldChecks[i]) newChecks[id] = true;
+      return { id, text };
     });
-    document.querySelectorAll('.task-card').forEach(card=>{
-      card.addEventListener('click', ()=> openModal(card.dataset.id));
-      card.addEventListener('dragstart', e=>{
-        e.dataTransfer.setData('text/plain', card.dataset.id);
-        setTimeout(()=> card.style.opacity='0.4', 0);
+    person.checks = newChecks;
+    return person.items;
+  }
+
+  function personCardHTML(person, kind){
+    const editingId = kind==='hire' ? editingHireId : editingDepartureId;
+    const items = ensurePersonItems(person, kind);
+    const checks = person.checks || {};
+    const doneCount = items.filter(it=>checks[it.id]).length;
+    const collapsed = !!person.collapsed;
+    if(editingId === person.id){
+      return `
+        <div class="person-card editing" data-id="${person.id}" data-kind="${kind}">
+          <input type="text" class="edit-person-name" value="${escapeHtml(person.name)}">
+          ${kind==='hire' ? `
+            <select class="edit-person-type">
+              <option value="project" ${person.type==='project'?'selected':''}>專案</option>
+              <option value="general" ${person.type==='general'?'selected':''}>一般</option>
+            </select>
+            <div class="month-picker-label">※ 更換類型會把細項重設為該類型的預設清單</div>` : ''}
+          <div class="checklist-item-form-actions">
+            <button class="btn-ghost person-edit-cancel-btn" data-id="${person.id}" data-kind="${kind}">取消</button>
+            <button class="btn-solid person-edit-save-btn" data-id="${person.id}" data-kind="${kind}">儲存</button>
+          </div>
+        </div>
+      `;
+    }
+    const itemRows = items.map(it=>{
+      if(editingPersonItem && editingPersonItem.personId===person.id && editingPersonItem.itemId===it.id){
+        return `
+          <div class="check-item editing">
+            <input type="text" class="edit-person-item-text" value="${escapeHtml(it.text)}">
+            <div class="checklist-item-form-actions">
+              <button class="btn-ghost pitem-edit-cancel-btn" type="button">取消</button>
+              <button class="btn-solid pitem-edit-save-btn" type="button" data-id="${person.id}" data-kind="${kind}" data-item="${it.id}">儲存</button>
+            </div>
+          </div>`;
+      }
+      const on = !!checks[it.id];
+      return `
+        <label class="check-item ${on?'checked':''}">
+          <input type="checkbox" class="person-check-cb" data-id="${person.id}" data-kind="${kind}" data-item="${it.id}" ${on?'checked':''}>
+          <span class="check-item-text">${escapeHtml(it.text)}</span>
+          ${checkedDateHTML(checks[it.id])}
+          <span class="check-item-actions">
+            <button class="check-item-edit-btn pitem-edit-btn" type="button" data-id="${person.id}" data-item="${it.id}" title="編輯細項">✎</button>
+            <button class="check-item-del-btn pitem-del-btn" type="button" data-id="${person.id}" data-kind="${kind}" data-item="${it.id}" title="刪除細項">✕</button>
+          </span>
+        </label>`;
+    }).join('');
+    const addForm = addingPersonItemFor===person.id ? `
+      <div class="checklist-item-form">
+        <input type="text" class="new-person-item-text" placeholder="輸入細項名稱">
+        <div class="checklist-item-form-actions">
+          <button class="btn-ghost pitem-add-cancel-btn" type="button">取消</button>
+          <button class="btn-solid pitem-add-save-btn" type="button" data-id="${person.id}" data-kind="${kind}">新增</button>
+        </div>
+      </div>` : '';
+    return `
+      <div class="person-card ${collapsed?'collapsed':''}" data-id="${person.id}" data-kind="${kind}">
+        <div class="person-card-head">
+          <button class="person-toggle-btn" type="button" data-id="${person.id}" data-kind="${kind}" title="${collapsed?'展開細項':'收起細項'}" aria-expanded="${!collapsed}">▾</button>
+          <span class="person-name">${escapeHtml(person.name)}</span>
+          ${kind==='hire' ? `<span class="cat-badge" style="background:${person.type==='project'?'var(--cat-urgent)':'var(--cat-onboarding)'}">${person.type==='project'?'專案':'一般'}</span>` : ''}
+          <span class="checklist-progress">${doneCount}/${items.length}</span>
+          <button class="person-edit-btn" type="button" data-id="${person.id}" data-kind="${kind}" title="編輯">✎</button>
+          <button class="person-del-btn" type="button" data-id="${person.id}" data-kind="${kind}" title="刪除">✕</button>
+        </div>
+        ${collapsed ? '' : `
+        <div class="checklist-items">
+          ${itemRows || '<div class="empty-col">— 尚無細項 —</div>'}
+        </div>
+        ${addForm}
+        ${addingPersonItemFor===person.id ? '' : `<button class="btn-mini pitem-add-btn" type="button" data-id="${person.id}">＋ 新增細項</button>`}
+        `}
+      </div>
+    `;
+  }
+
+  function rosterSectionHTML(kind){
+    const list = kind==='hire' ? newHires : departures;
+    const title = kind==='hire' ? '👏🏻&nbsp;&nbsp;新進人員' : '👋🏻&nbsp;&nbsp;離職人員';
+    const addFlag = kind==='hire' ? addingHire : addingDeparture;
+    return `
+      <div class="checklist-section ${collapsedSections[kind]?'collapsed':''}">
+        <div class="checklist-section-head">
+          ${sectionToggleHTML(kind)}
+          <h3>${title}</h3>
+          <span class="checklist-progress">${list.length} 人</span>
+          <button class="btn-mini roster-add-btn" data-kind="${kind}">＋ 新增${kind==='hire'?'新人':'離職人員'}</button>
+        </div>
+        <div class="checklist-section-body">
+        ${addFlag ? `
+          <div class="checklist-item-form" data-kind="${kind}">
+            <input type="text" class="new-person-name" placeholder="輸入姓名">
+            ${kind==='hire' ? `
+              <select class="new-person-type">
+                <option value="project">專案</option>
+                <option value="general" selected>一般</option>
+              </select>` : ''}
+            <div class="checklist-item-form-actions">
+              <button class="btn-ghost person-cancel-btn" data-kind="${kind}">取消</button>
+              <button class="btn-solid person-save-btn" data-kind="${kind}">新增</button>
+            </div>
+          </div>
+        ` : ''}
+        <div class="person-list">
+          ${list.length ? list.map(p=> personCardHTML(p, kind)).join('') : `<div class="empty-col">— 尚無${kind==='hire'?'新進':'離職'}人員 —</div>`}
+        </div>
+        </div>
+      </div>
+    `;
+  }
+
+  function renderChecklistView(){
+    const label = document.getElementById('checklistMonthLabel');
+    if(label) label.textContent = `${checklistMonth.y}年${checklistMonth.m}月`;
+    const container = document.getElementById('checklistContainer');
+    if(!container) return;
+    container.innerHTML =
+      checklistSectionHTML('payroll') +
+      checklistSectionHTML('medical') +
+      checklistSectionHTML('other') +
+      rosterSectionHTML('hire') +
+      rosterSectionHTML('departure');
+    wireChecklistEvents(container);
+  }
+
+  function wireChecklistEvents(container){
+    container.querySelectorAll('.section-toggle-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const k = btn.dataset.sectionKey;
+        collapsedSections[k] = !collapsedSections[k];
+        persist();
+        renderChecklistView();
       });
-      card.addEventListener('dragend', ()=>{ card.style.opacity='1'; });
+    });
+    container.querySelectorAll('.check-item-cb').forEach(cb=>{
+      cb.addEventListener('change', ()=> toggleChecklistItem(cb.dataset.id));
+    });
+    container.querySelectorAll('.checklist-add-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ addingItemSection = btn.dataset.section; collapsedSections[btn.dataset.section] = false; renderChecklistView(); });
+    });
+    container.querySelectorAll('.item-cancel-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ addingItemSection = null; renderChecklistView(); });
+    });
+    container.querySelectorAll('.item-save-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const section = btn.dataset.section;
+        const form = btn.closest('.checklist-item-form');
+        const text = form.querySelector('.new-item-text').value.trim();
+        if(!text){ showToast('請輸入項目名稱'); return; }
+        let months = null;
+        if(section==='other'){
+          const checked = Array.from(form.querySelectorAll('.newitem-month-cb:checked')).map(cb=>parseInt(cb.value,10));
+          months = checked.length ? checked : null;
+        }
+        checklistItems.push({ id: uid(), section, text, months });
+        addingItemSection = null;
+        persist();
+        renderChecklistView();
+        showToast('項目已新增');
+      });
+    });
+    container.querySelectorAll('.check-item-edit-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ editingChecklistItemId = btn.dataset.id; renderChecklistView(); });
+    });
+    container.querySelectorAll('.item-edit-cancel-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ editingChecklistItemId = null; renderChecklistView(); });
+    });
+    container.querySelectorAll('.item-edit-save-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const id = btn.dataset.id;
+        const box = btn.closest('.check-item.editing');
+        const text = box.querySelector('.edit-item-text').value.trim();
+        if(!text){ showToast('項目名稱不能是空的'); return; }
+        const it = checklistItems.find(x=>x.id===id);
+        if(it){
+          it.text = text;
+          if(it.section==='other'){
+            const checked = Array.from(box.querySelectorAll('.edititem-month-cb:checked')).map(cb=>parseInt(cb.value,10));
+            it.months = checked.length ? checked : null;
+          }
+        }
+        editingChecklistItemId = null;
+        persist();
+        renderChecklistView();
+        showToast('項目已更新');
+      });
+    });
+    container.querySelectorAll('.check-item-del-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const id = btn.dataset.id;
+        const ok = await askConfirm('確定要刪除這個項目嗎？');
+        if(!ok) return;
+        checklistItems = checklistItems.filter(x=>x.id!==id);
+        persist();
+        renderChecklistView();
+        showToast('項目已刪除');
+      });
+    });
+
+    container.querySelectorAll('.roster-add-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        if(btn.dataset.kind==='hire') addingHire = true; else addingDeparture = true;
+        collapsedSections[btn.dataset.kind] = false;
+        renderChecklistView();
+      });
+    });
+    container.querySelectorAll('.person-cancel-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        if(btn.dataset.kind==='hire') addingHire = false; else addingDeparture = false;
+        renderChecklistView();
+      });
+    });
+    container.querySelectorAll('.person-save-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const kind = btn.dataset.kind;
+        const form = btn.closest('.checklist-item-form');
+        const name = form.querySelector('.new-person-name').value.trim();
+        if(!name){ showToast('請輸入姓名'); return; }
+        if(kind==='hire'){
+          const type = form.querySelector('.new-person-type').value;
+          newHires.push({ id: uid(), name, type, createdAt: Date.now(), items: templateItems('hire', type), checks: {} });
+          addingHire = false;
+        } else {
+          departures.push({ id: uid(), name, createdAt: Date.now(), items: templateItems('departure'), checks: {} });
+          addingDeparture = false;
+        }
+        persist();
+        renderChecklistView();
+        showToast('已新增');
+      });
+    });
+    container.querySelectorAll('.person-edit-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        if(btn.dataset.kind==='hire') editingHireId = btn.dataset.id; else editingDepartureId = btn.dataset.id;
+        renderChecklistView();
+      });
+    });
+    container.querySelectorAll('.person-edit-cancel-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        if(btn.dataset.kind==='hire') editingHireId = null; else editingDepartureId = null;
+        renderChecklistView();
+      });
+    });
+    container.querySelectorAll('.person-edit-save-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const kind = btn.dataset.kind;
+        const id = btn.dataset.id;
+        const box = btn.closest('.person-card.editing');
+        const name = box.querySelector('.edit-person-name').value.trim();
+        if(!name){ showToast('姓名不能是空的'); return; }
+        const list = kind==='hire' ? newHires : departures;
+        const p = list.find(x=>x.id===id);
+        if(p){
+          p.name = name;
+          if(kind==='hire'){
+            const newType = box.querySelector('.edit-person-type').value;
+            if(newType !== p.type){ p.type = newType; p.items = templateItems('hire', newType); p.checks = {}; }
+          }
+        }
+        if(kind==='hire') editingHireId = null; else editingDepartureId = null;
+        persist();
+        renderChecklistView();
+        showToast('已更新');
+      });
+    });
+    container.querySelectorAll('.person-del-btn').forEach(btn=>{
+      btn.addEventListener('click', async ()=>{
+        const kind = btn.dataset.kind;
+        const id = btn.dataset.id;
+        const ok = await askConfirm('確定要刪除這位人員的紀錄嗎？');
+        if(!ok) return;
+        if(kind==='hire') newHires = newHires.filter(x=>x.id!==id);
+        else departures = departures.filter(x=>x.id!==id);
+        persist();
+        renderChecklistView();
+        showToast('已刪除');
+      });
+    });
+    const findPerson = (kind, id)=> (kind==='hire' ? newHires : departures).find(x=>x.id===id);
+
+    container.querySelectorAll('.person-check-cb').forEach(cb=>{
+      cb.addEventListener('change', ()=>{
+        const p = findPerson(cb.dataset.kind, cb.dataset.id);
+        if(p){
+          if(!p.checks) p.checks = {};
+          const k = cb.dataset.item;
+          if(p.checks[k]) delete p.checks[k]; else p.checks[k] = Date.now();
+        }
+        persist();
+        renderChecklistView();
+      });
+    });
+    // 收合／展開
+    container.querySelectorAll('.person-toggle-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const p = findPerson(btn.dataset.kind, btn.dataset.id);
+        if(p){ p.collapsed = !p.collapsed; persist(); renderChecklistView(); }
+      });
+    });
+    // 細項：編輯
+    container.querySelectorAll('.pitem-edit-btn').forEach(btn=>{
+      btn.addEventListener('click', (e)=>{
+        e.preventDefault();
+        editingPersonItem = { personId: btn.dataset.id, itemId: btn.dataset.item };
+        addingPersonItemFor = null;
+        renderChecklistView();
+        const inp = container.querySelector('.edit-person-item-text');
+        if(inp){ inp.focus(); inp.selectionStart = inp.selectionEnd = inp.value.length; }
+      });
+    });
+    container.querySelectorAll('.pitem-edit-cancel-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ editingPersonItem = null; renderChecklistView(); });
+    });
+    container.querySelectorAll('.pitem-edit-save-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const box = btn.closest('.check-item.editing');
+        const text = box.querySelector('.edit-person-item-text').value.trim();
+        if(!text){ showToast('細項名稱不能是空的'); return; }
+        const p = findPerson(btn.dataset.kind, btn.dataset.id);
+        const it = p && (p.items||[]).find(x=>x.id===btn.dataset.item);
+        if(it) it.text = text;
+        editingPersonItem = null;
+        persist();
+        renderChecklistView();
+        showToast('細項已更新');
+      });
+    });
+    // 細項：刪除
+    container.querySelectorAll('.pitem-del-btn').forEach(btn=>{
+      btn.addEventListener('click', async (e)=>{
+        e.preventDefault();
+        const ok = await askConfirm('確定要刪除這個細項嗎？');
+        if(!ok) return;
+        const p = findPerson(btn.dataset.kind, btn.dataset.id);
+        if(p){
+          p.items = (p.items||[]).filter(x=>x.id!==btn.dataset.item);
+          if(p.checks) delete p.checks[btn.dataset.item];
+        }
+        persist();
+        renderChecklistView();
+        showToast('細項已刪除');
+      });
+    });
+    // 細項：新增
+    container.querySelectorAll('.pitem-add-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        addingPersonItemFor = btn.dataset.id;
+        editingPersonItem = null;
+        renderChecklistView();
+        const inp = container.querySelector('.new-person-item-text');
+        if(inp) inp.focus();
+      });
+    });
+    container.querySelectorAll('.pitem-add-cancel-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{ addingPersonItemFor = null; renderChecklistView(); });
+    });
+    container.querySelectorAll('.pitem-add-save-btn').forEach(btn=>{
+      btn.addEventListener('click', ()=>{
+        const form = btn.closest('.checklist-item-form');
+        const text = form.querySelector('.new-person-item-text').value.trim();
+        if(!text){ showToast('請輸入細項名稱'); return; }
+        const p = findPerson(btn.dataset.kind, btn.dataset.id);
+        if(p){
+          ensurePersonItems(p, btn.dataset.kind);
+          p.items.push({ id: uid(), text });
+        }
+        addingPersonItemFor = null;
+        persist();
+        renderChecklistView();
+        showToast('細項已新增');
+      });
+    });
+    // Enter 快速儲存
+    container.querySelectorAll('.edit-person-item-text, .new-person-item-text').forEach(inp=>{
+      inp.addEventListener('keydown', e=>{
+        if(e.key==='Enter'){
+          e.preventDefault();
+          const btn = inp.closest('.check-item, .checklist-item-form').querySelector('.pitem-edit-save-btn, .pitem-add-save-btn');
+          if(btn) btn.click();
+        }
+        if(e.key==='Escape'){ editingPersonItem = null; addingPersonItemFor = null; renderChecklistView(); }
+      });
     });
   }
 
-  function setupDropzones(){
-    document.querySelectorAll('[data-dropzone]').forEach(zone=>{
-      zone.addEventListener('dragover', e=>{ e.preventDefault(); zone.classList.add('drag-over'); });
-      zone.addEventListener('dragleave', ()=> zone.classList.remove('drag-over'));
-      zone.addEventListener('drop', e=>{
-        e.preventDefault();
-        zone.classList.remove('drag-over');
-        const id = e.dataTransfer.getData('text/plain');
-        const task = tasks.find(t=>t.id===id);
-        if(task){ task.status = zone.dataset.dropzone; persist(); renderAll(); }
-      });
-    });
+  function toggleChecklistItem(itemId){
+    const key = monthKey(checklistMonth.y, checklistMonth.m);
+    if(!checklistChecks[key]) checklistChecks[key] = {};
+    if(checklistChecks[key][itemId]) delete checklistChecks[key][itemId];
+    else checklistChecks[key][itemId] = Date.now();
+    persist();
+    renderChecklistView();
   }
 
   function renderCalendar(){
@@ -966,7 +1672,11 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       return `<div class="cal-cell ${isToday?'today':''}" data-date="${c.dateStr}">
         <span class="cal-daynum ${isHoliday?'holiday':''}">${c.day}</span>
         ${holidayName ? `<span class="holiday-label">${escapeHtml(holidayName)}</span>` : ''}
-        ${shown.map(t=>`<div class="cal-chip ${t.status==='done'?'done':''}" style="border-left-color:${CATEGORY_COLOR[t.category || 'routine']}">${escapeHtml(t.title)}</div>`).join('')}
+        ${shown.map(t=>`<div class="cal-chip ${t.status==='done'?'done':''}" style="border-left-color:${CATEGORY_COLOR[t.category || 'routine']}" title="${escapeHtml(t.title)}">
+          <input type="checkbox" class="task-done-cb" data-id="${t.id}" ${t.status==='done'?'checked':''} title="${t.status==='done'?'取消完成':'標記為完成'}">
+          ${t.status==='done' ? checkedDateHTML(t.doneAt) : ''}
+          <span class="cal-chip-title">${escapeHtml(t.title)}</span>
+        </div>`).join('')}
         ${more>0 ? `<span class="cal-more">+${more} 更多</span>` : ''}
       </div>`;
     }).join('');
@@ -982,9 +1692,35 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         if(task){ task.dueDate = cell.dataset.date; persist(); renderAll(); }
       });
     });
+    wireTaskDoneCheckboxes(grid);
+  }
+
+  // 任務完成勾選框（行事曆格子＆當日側欄共用）
+  function wireTaskDoneCheckboxes(root){
+    root.querySelectorAll('.task-done-cb').forEach(cb=>{
+      cb.addEventListener('click', e=> e.stopPropagation());
+      cb.addEventListener('change', ()=> toggleTaskDone(cb.dataset.id));
+    });
+  }
+
+  function toggleTaskDone(id){
+    const t = tasks.find(x=>x.id===id);
+    if(!t) return;
+    if(t.status === 'done'){
+      t.status = 'todo';
+      delete t.doneAt;
+      showToast('已改回待辦');
+    } else {
+      t.status = 'done';
+      t.doneAt = Date.now();
+      showToast('任務完成 🎉');
+    }
+    persist();
+    renderAll();
   }
 
   function openDayPanel(dateStr){
+    if(statsPanelMode) closeStatsPanel();
     dayPanelDate = dateStr;
     renderDayPanel(dateStr);
     document.getElementById('dayPanel').classList.add('open');
@@ -1001,7 +1737,11 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     container.innerHTML = list.length ? list.map(t=>`
       <div class="task-card ${t.status==='done'?'done':''}" data-id="${t.id}" draggable="true">
         <span class="cat-badge" style="background:${CATEGORY_COLOR[t.category || 'routine']}">${CATEGORY_LABEL[t.category || 'routine']}</span>
-        <div class="t-title">${escapeHtml(t.title)}</div>
+        <div class="t-title-row">
+          <input type="checkbox" class="task-done-cb" data-id="${t.id}" ${t.status==='done'?'checked':''} title="${t.status==='done'?'取消完成':'標記為完成'}">
+          ${t.status==='done' ? checkedDateHTML(t.doneAt) : ''}
+          <div class="t-title">${escapeHtml(t.title)}</div>
+        </div>
         <div class="t-meta">
           <span class="pri-dot" style="background:${PRI_COLOR[t.priority]}"></span>
           <span>${STATUS_LABEL[t.status]}</span>
@@ -1011,6 +1751,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     container.querySelectorAll('.task-card').forEach(card=>{
       card.addEventListener('click', ()=> openModal(card.dataset.id));
     });
+    wireTaskDoneCheckboxes(container);
   }
 
   function openModal(id){
@@ -1048,6 +1789,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     document.getElementById('kanbanView').classList.toggle('hidden', view!=='kanban');
     document.getElementById('calendarView').classList.toggle('hidden', view!=='calendar');
     document.getElementById('notesView').classList.toggle('hidden', view!=='notes');
+    document.getElementById('filterStrip').classList.toggle('hidden', view==='kanban');
   }
 
   function populateNoteCategorySelect(){
@@ -1166,6 +1908,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     dayPanelDate = null;
   });
   document.getElementById('dayPanelAdd').addEventListener('click', ()=> openModal(null));
+  document.getElementById('closeStatsPanel').addEventListener('click', closeStatsPanel);
 
   function saveTask(){
     const titleInput = document.getElementById('f-title');
@@ -1187,10 +1930,12 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     };
     if(editingId){
       const t = tasks.find(x=>x.id===editingId);
+      if(data.status==='done' && t.status!=='done') t.doneAt = Date.now();
+      if(data.status!=='done') delete t.doneAt;
       Object.assign(t, data);
       showToast('任務已更新');
     } else {
-      tasks.push({ id: uid(), createdAt: Date.now(), ...data });
+      tasks.push({ id: uid(), createdAt: Date.now(), ...data, ...(data.status==='done' ? { doneAt: Date.now() } : {}) });
       showToast('任務已新增');
     }
     persist();
@@ -1318,10 +2063,23 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     showToast('筆記已新增');
   });
 
-  document.getElementById('kanbanMonthPrev').addEventListener('click', ()=> shiftRecordMonth(-1));
-  document.getElementById('kanbanMonthNext').addEventListener('click', ()=> shiftRecordMonth(1));
-  document.getElementById('kanbanMonthThis').addEventListener('click', setRecordMonthThisMonth);
-  document.getElementById('kanbanMonthAll').addEventListener('click', setRecordMonthAll);
+  document.getElementById('checklistMonthPrev').addEventListener('click', ()=>{
+    let { y, m } = checklistMonth;
+    m -= 1; if(m < 1){ m = 12; y -= 1; }
+    checklistMonth = { y, m };
+    renderChecklistView();
+  });
+  document.getElementById('checklistMonthNext').addEventListener('click', ()=>{
+    let { y, m } = checklistMonth;
+    m += 1; if(m > 12){ m = 1; y += 1; }
+    checklistMonth = { y, m };
+    renderChecklistView();
+  });
+  document.getElementById('checklistMonthThis').addEventListener('click', ()=>{
+    const n = new Date();
+    checklistMonth = { y: n.getFullYear(), m: n.getMonth()+1 };
+    renderChecklistView();
+  });
   document.getElementById('notesMonthPrev').addEventListener('click', ()=> shiftRecordMonth(-1));
   document.getElementById('notesMonthNext').addEventListener('click', ()=> shiftRecordMonth(1));
   document.getElementById('notesMonthThis').addEventListener('click', setRecordMonthThisMonth);
@@ -1382,7 +2140,6 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   }
 
   populateNoteCategorySelect();
-  setupDropzones();
 })();
 </script>
 </body>
