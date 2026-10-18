@@ -35,6 +35,7 @@
     <div class="controls">
       <div class="view-toggle" id="viewToggle">
         <button class="vt-btn active" data-view="kanban">清單</button>
+        <button class="vt-btn" data-view="projects">專案</button>
         <button class="vt-btn" data-view="calendar">行事曆</button>
         <button class="vt-btn" data-view="notes">筆記</button>
       </div>
@@ -78,6 +79,14 @@
     <div class="cal-grid" id="calGrid"></div>
   </main>
 
+  <!-- PROJECTS VIEW -->
+  <main class="view hidden" id="projectsView">
+    <div class="pj-layout">
+      <aside class="pj-side" id="pjSide"></aside>
+      <section id="pjDetail"></section>
+    </div>
+  </main>
+
   <!-- NOTES VIEW -->
   <main class="view hidden" id="notesView">
     <div class="month-toolbar">
@@ -117,6 +126,45 @@
       <button class="icon-btn" id="closeStatsPanel">✕</button>
     </div>
     <div class="day-panel-list" id="statsPanelList"></div>
+  </div>
+
+  <!-- PROJECT IMPORT MODAL -->
+  <div class="modal-overlay hidden" id="pjImportOverlay">
+    <div class="modal pj-import-modal">
+      <div class="modal-head" style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div><span class="eyebrow">IMPORT</span><h3>📥 從 Notion 匯入專案細項</h3></div>
+        <button class="icon-btn" id="pjImportClose" type="button">✕</button>
+      </div>
+      <div class="pj-imp-grid">
+        <label>匯入到<select id="pjImpTarget"></select></label>
+        <label id="pjImpNewWrap">新專案名稱<input type="text" id="pjImpName" placeholder="例如：116年升遷作業"></label>
+        <label id="pjImpCatWrap">分類<select id="pjImpCat"></select></label>
+        <label id="pjImpModeWrap">匯入方式<select id="pjImpMode"><option value="append">加在原本細項後面</option><option value="replace">取代原本所有細項</option></select></label>
+      </div>
+      <div class="pj-imp-help">
+        <b>方法一：直接複製</b>　在 Notion 表格裡框選要的列（含標題列）→ ⌘C → 貼到下面框框<br>
+        <b>方法二：匯出 CSV</b>　Notion 表格右上角「⋯」→ 匯出 → 格式選「Markdown &amp; CSV」→ 解壓縮後選 .csv 檔<br>
+        會自動對應的欄位：<b>Date／日期</b>（可用「10/12 → 10/20」範圍）、<b>項目內容</b>、<b>備註</b>、<b>產出文件</b>（多份用頓號或逗號分隔）；工作天數會重新計算
+      </div>
+      <div class="pj-imp-src">
+        <label>資料（貼上 Notion 表格或 CSV 內容）<textarea id="pjImpText" placeholder="Date&#9;工作天數&#9;項目內容&#9;備註&#10;10/8&#9;1天&#9;第一次績效考核問題回饋簡報&#9;"></textarea></label>
+      </div>
+      <div class="pj-imp-tools">
+        <button class="btn-mini" id="pjImpFileBtn" type="button">📄 選擇 CSV 檔</button>
+        <input type="file" id="pjImpFile" accept=".csv,.tsv,.txt,.md,text/csv" style="display:none">
+        <span id="pjImpFileName"></span>
+        <span style="flex:1"></span>
+        日期沒寫年份時從<input type="number" id="pjImpYear" min="2000" max="2100">年開始算（跨年自動 +1）
+      </div>
+      <div class="pj-imp-preview" id="pjImpPreview"></div>
+      <div class="modal-actions">
+        <span></span>
+        <div class="modal-actions-right">
+          <button class="btn-ghost" id="pjImpCancel" type="button">取消</button>
+          <button class="btn-solid" id="pjImpOk" type="button">匯入</button>
+        </div>
+      </div>
+    </div>
   </div>
 
   <!-- MODAL -->
@@ -161,10 +209,11 @@
             <option value="payroll">薪資計算</option>
             <option value="medical">臨場醫護</option>
             <option value="urgent">突發任務</option>
-            <option value="routine">扣繳申報資料</option>
+            <option value="routine">扣繳申報</option>
             <option value="labor">勞動契約</option>
             <option value="general">例行公事</option>
-            <option value="onboarding">新進追蹤</option>
+            <option value="onboarding">新進流程</option>
+            <option value="benefit">薪酬福利</option>
           </select>
         </label>
         <label class="field">
@@ -221,6 +270,7 @@
   --cat-labor: #C9A66B;
   --cat-general: #A8C8B0;
   --cat-onboarding: #8E9AE8;
+  --cat-benefit: #A8CF5A;
   --font-display: 'Baloo 2', 'Quicksand', ui-rounded, sans-serif;
   --font-body: 'Nunito', -apple-system, sans-serif;
 }
@@ -751,6 +801,136 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   .cal-cell{ min-height: 70px; }
   .month-check-grid{ grid-template-columns: repeat(4,1fr); }
 }
+
+/* ====== 專案 ====== */
+.pj-layout{ display:grid; grid-template-columns:260px minmax(0,1fr); gap:20px; align-items:start; }
+.pj-side{ display:flex; flex-direction:column; gap:10px; }
+.pj-card{ background:var(--panel); border:2px solid var(--grid-line); border-radius:18px; padding:14px; cursor:pointer; transition:all .15s ease; }
+.pj-card:hover{ transform:translateY(-1px); }
+.pj-card.active{ border-color:var(--coral); box-shadow:0 4px 0 #FFD9CC; }
+.pj-card-name{ font-family:var(--font-display); font-weight:800; font-size:16px; margin:6px 0 4px; }
+.pj-card-range{ font-size:12px; color:var(--ink-dim); font-weight:700; }
+.pj-track{ height:8px; background:var(--panel-2); border-radius:999px; overflow:hidden; margin-top:8px; }
+.pj-fill{ height:100%; background:var(--green); border-radius:999px; }
+.pj-add-btn{ border:2px dashed var(--ink-faint); background:transparent; border-radius:18px; padding:12px;
+  font-family:var(--font-display); font-weight:700; color:var(--ink-dim); cursor:pointer; font-size:14px; }
+.pj-add-btn:hover{ border-color:var(--coral); color:var(--coral); }
+.pj-side-form{ background:var(--panel); border:2px solid var(--coral); border-radius:18px; padding:12px; display:flex; flex-direction:column; gap:8px; }
+.pj-side-form .pj-form-actions{ display:flex; gap:8px; justify-content:flex-end; }
+.pj-empty{ background:var(--panel); border:2px dashed var(--grid-line); border-radius:22px; padding:40px; text-align:center; color:var(--ink-dim); font-weight:700; }
+
+.pj-panel{ background:var(--panel); border:2px solid var(--grid-line); border-radius:22px; padding:20px 22px; margin-bottom:18px; }
+.pj-head{ display:flex; align-items:flex-start; gap:10px; flex-wrap:wrap; }
+.pj-head h2{ font-family:var(--font-display); font-size:24px; margin:4px 0 6px; font-weight:800; color:var(--ink); }
+.pj-head .pj-spacer{ flex:1; }
+.pj-head-form{ display:flex; gap:8px; flex-wrap:wrap; align-items:center; flex:1; }
+.pj-head-form input{ flex:1; min-width:200px; }
+.pj-meta{ display:flex; gap:8px; flex-wrap:wrap; }
+.pj-pill{ font-family:var(--font-display); font-weight:700; font-size:12px; background:var(--panel-2); color:var(--ink-dim); border-radius:999px; padding:3px 10px; }
+.pj-pill.warn{ background:var(--rose); color:#fff; }
+.pj-pill.now{ background:#FFF0D6; color:#C98A1E; }
+.pj-sync{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; color:var(--ink-dim); margin-top:10px; cursor:pointer; }
+.pj-sync input{ width:15px; height:15px; padding:0; accent-color:var(--coral); }
+.cal-chip.proj{ background: #F6F0FC; }
+.proj-item-cb{ width:13px; height:13px; flex-shrink:0; margin:0; padding:0; accent-color: var(--coral); cursor:pointer; }
+.t-title-row .proj-item-cb{ width:17px; height:17px; }
+.pj-title{ font-family:var(--font-display); font-weight:800; font-size:16px; margin:0 0 12px; display:flex; align-items:center; gap:8px; flex-wrap:wrap; color:var(--ink); }
+.pj-hint{ font-family:var(--font-body); font-weight:600; font-size:12px; color:var(--ink-dim); }
+
+/* 時程圖 */
+.pj-gantt{ position:relative; }
+.pj-g-row, .pj-g-head{ display:grid; grid-template-columns:200px minmax(0,1fr); align-items:center; }
+.pj-g-row{ min-height:26px; }
+.pj-g-label{ font-size:12px; font-weight:700; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; padding-right:10px; }
+.pj-g-label.done{ color:var(--ink-faint); text-decoration:line-through; }
+.pj-g-track{ position:relative; height:26px; border-left:1px solid var(--grid-line); }
+.pj-g-bar{ position:absolute; top:6px; height:14px; border-radius:7px; min-width:8px; cursor:pointer; }
+.pj-g-bar.done{ opacity:.35; }
+.pj-g-bar.late{ box-shadow:0 0 0 2px var(--rose); }
+.pj-g-months{ position:relative; height:22px; margin-bottom:4px; }
+.pj-g-month{ position:absolute; top:0; font-family:var(--font-display); font-weight:800; font-size:12px; color:var(--ink-dim); border-left:1.5px solid var(--grid-line); padding-left:5px; height:100%; }
+.pj-g-grid{ position:absolute; top:26px; bottom:0; left:200px; right:0; pointer-events:none; }
+.pj-g-grid .mline{ position:absolute; top:0; bottom:0; border-left:1.5px dashed var(--grid-line); }
+.pj-g-grid .today{ position:absolute; top:-4px; bottom:0; border-left:2px solid var(--coral); }
+.pj-g-grid .today span{ position:absolute; top:-18px; left:-16px; font-size:10px; font-weight:800; color:#fff; background:var(--coral); border-radius:6px; padding:1px 5px; white-space:nowrap; }
+.pj-legend{ display:flex; gap:14px; flex-wrap:wrap; font-size:12px; color:var(--ink-dim); font-weight:700; margin-top:10px; }
+.pj-legend i{ display:inline-block; width:12px; height:12px; border-radius:4px; vertical-align:-2px; margin-right:4px; }
+
+/* 細項表 */
+.pj-tbl{ width:100%; border-collapse:separate; border-spacing:0; }
+.pj-tbl th{ font-family:var(--font-display); font-size:13px; color:var(--ink-dim); text-align:left; padding:6px 8px; border-bottom:2px solid var(--grid-line); white-space:nowrap; }
+.pj-tbl td{ padding:9px 8px; border-bottom:1px dashed var(--grid-line); font-size:14px; vertical-align:middle; color:var(--ink); }
+.pj-tbl tr.done td{ color:var(--ink-faint); }
+.pj-tbl tr.done .pj-text{ text-decoration:line-through; }
+.pj-tbl tr.now td{ background:#FFFAF0; }
+.pj-tbl tr.late td:first-child{ box-shadow:inset 3px 0 0 var(--rose); }
+.pj-c-check{ width:34px; }
+.pj-c-check input, .pj-doc-row input[type=checkbox]{ width:17px; height:17px; padding:0; accent-color:var(--coral); cursor:pointer; }
+.pj-c-date{ white-space:nowrap; font-family:var(--font-display); font-weight:700; }
+.pj-c-date .arrow{ color:var(--ink-faint); margin:0 4px; }
+.pj-days{ font-family:var(--font-display); font-weight:800; font-size:12px; background:var(--panel-2); border-radius:999px; padding:2px 9px; white-space:nowrap; }
+.pj-c-note{ font-size:12.5px; color:var(--ink-dim); max-width:240px; }
+.pj-c-docs{ max-width:220px; }
+.pj-c-act{ white-space:nowrap; width:64px; text-align:right; }
+.pj-status{ font-family:var(--font-display); font-weight:800; font-size:10.5px; border-radius:999px; padding:1px 7px; margin-left:6px; white-space:nowrap; }
+.pj-status.late{ background:var(--rose); color:#fff; }
+.pj-status.now{ background:#FFF0D6; color:#C98A1E; }
+.pj-tbl .check-date{ margin-left:6px; }
+.pj-edit-row td{ background:#FFF8F2; }
+.pj-edit-row input{ width:100%; padding:6px 8px; font-size:13px; }
+.pj-edit-row .pj-dates{ display:flex; align-items:center; gap:4px; }
+.pj-edit-row .pj-dates input{ width:140px; }
+.pj-add-form{ display:grid; grid-template-columns:150px 150px minmax(0,1.4fr) minmax(0,1fr) auto; gap:8px; align-items:end; margin-top:14px; background:var(--panel-2); border-radius:14px; padding:12px; }
+.pj-add-form label{ font-size:11px; font-weight:800; color:var(--ink-dim); display:flex; flex-direction:column; gap:4px; }
+.pj-add-form input, .pj-add-form select{ background:#fff; padding:7px 9px; font-size:13px; width:100%; }
+.pj-live-days{ font-size:11px; font-weight:800; color:var(--coral); grid-column:1 / -1; min-height:0; }
+.pj-doc-chip{ display:inline-block; font-size:11px; font-weight:700; background:#F3ECFB; color:#8A6BB0; border-radius:8px; padding:1px 7px; margin:2px 4px 0 0; line-height:1.4; }
+.pj-doc-chip.done{ background:rgba(143,214,148,0.22); color:#5FA868; text-decoration:line-through; }
+
+/* 產出文件 */
+.pj-doc-summary{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:12px; }
+.pj-doc-list{ display:flex; flex-direction:column; gap:8px; }
+.pj-doc-row{ display:grid; grid-template-columns:28px 34px minmax(0,1.3fr) minmax(0,1.2fr) 92px 64px; gap:10px; align-items:center; border:2px solid var(--grid-line); border-radius:14px; padding:9px 12px; background:#fff; }
+.pj-doc-row.done{ background:#F7FCF7; border-color:#DDF2DE; }
+.pj-doc-row.done .pj-doc-name{ text-decoration:line-through; color:var(--ink-faint); }
+.pj-doc-row.late{ border-color:#FFC2CD; }
+.pj-doc-row input[type=checkbox]{ accent-color:var(--green); }
+.pj-doc-icon{ font-size:20px; text-align:center; }
+.pj-doc-name{ font-weight:800; font-size:14px; color:var(--ink); }
+.pj-doc-name a{ color:var(--coral); font-size:12px; margin-left:6px; text-decoration:none; font-weight:700; }
+.pj-doc-sub{ font-size:11.5px; color:var(--ink-dim); font-weight:700; margin-top:2px; }
+.pj-doc-item{ font-size:12.5px; color:var(--ink-dim); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.pj-doc-due{ font-family:var(--font-display); font-weight:700; font-size:12px; text-align:right; white-space:nowrap; }
+.pj-doc-due.late{ color:var(--rose); }
+.pj-doc-row.editing{ grid-template-columns:120px minmax(0,1fr) minmax(0,1fr) minmax(0,1fr) auto; }
+.pj-doc-row.editing input, .pj-doc-row.editing select{ padding:6px 8px; font-size:13px; width:100%; }
+.pj-doc-add{ grid-template-columns:130px minmax(0,1.2fr) minmax(0,1.2fr) minmax(0,1fr) auto; }
+
+/* 匯入視窗 */
+.pj-import-modal{ width:760px; }
+.pj-imp-grid{ display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
+.pj-imp-grid label, .pj-imp-src label{ font-size:12px; font-weight:800; color:var(--ink-dim); display:flex; flex-direction:column; gap:5px; }
+.pj-imp-src textarea{ width:100%; min-height:120px; font-family: ui-monospace, Menlo, monospace; font-size:12px; }
+.pj-imp-tools{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0 12px; font-size:12px; color:var(--ink-dim); font-weight:700; }
+.pj-imp-tools input[type=number]{ width:90px; padding:6px 8px; }
+.pj-imp-help{ background:var(--panel-2); border-radius:12px; padding:10px 12px; font-size:12px; line-height:1.7; color:var(--ink-dim); margin-bottom:12px; }
+.pj-imp-help b{ color:var(--ink); }
+.pj-imp-preview{ max-height:260px; overflow:auto; border:2px solid var(--grid-line); border-radius:12px; margin-bottom:14px; }
+.pj-imp-preview table{ width:100%; border-collapse:collapse; font-size:12.5px; }
+.pj-imp-preview th{ position:sticky; top:0; background:var(--panel-2); text-align:left; padding:6px 8px; font-family:var(--font-display); color:var(--ink-dim); }
+.pj-imp-preview td{ padding:6px 8px; border-top:1px dashed var(--grid-line); color:var(--ink); }
+.pj-imp-preview tr.bad td{ color:var(--rose); }
+.pj-imp-msg{ font-size:12.5px; font-weight:700; color:var(--ink-dim); padding:10px; }
+
+@media (max-width: 900px){
+  .pj-layout{ grid-template-columns:1fr; }
+  .pj-g-row, .pj-g-head{ grid-template-columns:110px minmax(0,1fr); }
+  .pj-g-grid{ left:110px; }
+  .pj-add-form, .pj-doc-add, .pj-doc-row.editing, .pj-imp-grid{ grid-template-columns:1fr 1fr; }
+  .pj-tbl .pj-c-note, .pj-tbl .pj-c-docs{ display:none; }
+  .pj-doc-row{ grid-template-columns:24px 28px minmax(0,1fr) 70px 56px; }
+  .pj-doc-row .pj-doc-item{ display:none; }
+}
 </style>
 
 <script>
@@ -796,13 +976,13 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   const STATUS_LABEL = { todo: '待辦', doing: '進行中', done: '已完成' };
   const CATEGORY_LABEL = {
     perf: '績效考核', promo: '升遷制度', payroll: '薪資計算',
-    medical: '臨場醫護', urgent: '突發任務', routine: '扣繳申報資料',
-    labor: '勞動契約', general: '例行公事', onboarding: '新進追蹤'
+    medical: '臨場醫護', urgent: '突發任務', routine: '扣繳申報',
+    labor: '勞動契約', general: '例行公事', onboarding: '新進流程', benefit: '薪酬福利'
   };
   const CATEGORY_COLOR = {
     perf: 'var(--cat-perf)', promo: 'var(--cat-promo)', payroll: 'var(--cat-payroll)',
     medical: 'var(--cat-medical)', urgent: 'var(--cat-urgent)', routine: 'var(--cat-routine)',
-    labor: 'var(--cat-labor)', general: 'var(--cat-general)', onboarding: 'var(--cat-onboarding)'
+    labor: 'var(--cat-labor)', general: 'var(--cat-general)', onboarding: 'var(--cat-onboarding)', benefit: 'var(--cat-benefit)'
   };
   let categoryFilter = 'all';
   let recordMonth = null; // null = 全部月份；否則為 {y, m}（m 為 0-11）
@@ -870,6 +1050,31 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     '2026-10-25': '台灣光復節',
     '2026-10-26': '台灣光復節補假',
     '2026-12-25': '行憲紀念日',
+    // 116年（2027）政府行政機關辦公日曆表
+    '2027-01-01': '元旦',
+    '2027-02-04': '小年夜',
+    '2027-02-05': '除夕',
+    '2027-02-06': '春節',
+    '2027-02-07': '春節',
+    '2027-02-08': '春節',
+    '2027-02-09': '春節補假',
+    '2027-02-10': '春節補假',
+    '2027-02-28': '和平紀念日',
+    '2027-03-01': '和平紀念日補假',
+    '2027-04-04': '兒童節',
+    '2027-04-05': '清明節',
+    '2027-04-06': '兒童節補假',
+    '2027-04-30': '勞動節補假',
+    '2027-05-01': '勞動節',
+    '2027-06-09': '端午節',
+    '2027-09-15': '中秋節',
+    '2027-09-28': '教師節',
+    '2027-10-10': '國慶日',
+    '2027-10-11': '國慶日補假',
+    '2027-10-25': '台灣光復節',
+    '2027-12-24': '行憲紀念日補假',
+    '2027-12-25': '行憲紀念日',
+    '2027-12-31': '元旦補假',
   };
 
   function uid(){ return 't' + Date.now().toString(36) + Math.random().toString(36).slice(2,7); }
@@ -895,12 +1100,31 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         departures = data.departures || [];
         checklistChecks = data.checklistChecks || {};
         collapsedSections = data.collapsedSections || {};
+        projects = Array.isArray(data.projects) ? data.projects : [];
+        projects.forEach(p=>{ p.items = p.items || []; p.docs = p.docs || []; });
+        projectsSeeded = !!data.projectsSeeded;
+        let needSave = false;
+        if(!projectsSeeded){
+          // 第一次使用專案功能：預先匯入績效考核時程
+          projects.push(seedPerfProject());
+          projectsSeeded = true;
+          needSave = true;
+        }
+        perfDocsSeeded = !!data.perfDocsSeeded;
+        if(!perfDocsSeeded){
+          // 一次性：幫已建立的績效考核專案補上預設產出文件
+          const perf = projects.find(p=>p.name === '115下半年績效考核（年終）');
+          if(perf && !perf.docs.length) perf.docs = seedPerfDocs(perf);
+          perfDocsSeeded = true;
+          needSave = true;
+        }
         if(Array.isArray(data.checklistItems) && data.checklistItems.length){
           checklistItems = data.checklistItems;
         } else {
           checklistItems = defaultChecklistItems();
-          persist();
+          needSave = true;
         }
+        if(needSave) persist();
         renderAll();
       },
       (err)=>{
@@ -922,12 +1146,15 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     checklistItems = [];
     checklistChecks = {};
     collapsedSections = {};
+    projects = [];
+    projectsSeeded = false;
+    perfDocsSeeded = false;
   }
 
   async function persist(){
     if(!firebaseReady) return;
     try{
-      await taskDocRef.set({ tasks, notes, checklistItems, checklistChecks, newHires, departures, collapsedSections });
+      await taskDocRef.set({ tasks, notes, checklistItems, checklistChecks, newHires, departures, collapsedSections, projects, projectsSeeded, perfDocsSeeded });
     }catch(e){
       console.error(e);
       showToast('儲存到雲端失敗，請重試');
@@ -947,6 +1174,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     renderFilterStrip();
     renderMonthToolbars();
     renderChecklistView();
+    renderProjects();
     renderCalendar();
     renderNotes();
     if(dayPanelDate) renderDayPanel(dayPanelDate);
@@ -1680,8 +1908,15 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
           return (PRI_ORDER[a.priority] ?? 1) - (PRI_ORDER[b.priority] ?? 1);
         });
       const isToday = c.dateStr === today;
-      const shown = dayTasks.slice(0,3);
-      const more = dayTasks.length - shown.length;
+      const projEntries = projectCalEntries(c.dateStr);
+      const entries = [
+        ...dayTasks.filter(t=>t.status!=='done').map(t=>({ kind:'t', t })),
+        ...projEntries.filter(e=>!e.it.done).map(e=>({ kind:'p', ...e })),
+        ...dayTasks.filter(t=>t.status==='done').map(t=>({ kind:'t', t })),
+        ...projEntries.filter(e=>e.it.done).map(e=>({ kind:'p', ...e })),
+      ];
+      const shown = entries.slice(0,3);
+      const more = entries.length - shown.length;
       const dow = new Date(c.dateStr + 'T00:00:00').getDay();
       const isWeekend = dow === 0 || dow === 6;
       const holidayName = TW_HOLIDAYS[c.dateStr];
@@ -1689,11 +1924,11 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       return `<div class="cal-cell ${isToday?'today':''}" data-date="${c.dateStr}">
         <span class="cal-daynum ${isHoliday?'holiday':''}">${c.day}</span>
         ${holidayName ? `<span class="holiday-label">${escapeHtml(holidayName)}</span>` : ''}
-        ${shown.map(t=>`<div class="cal-chip ${t.status==='done'?'done':''}" style="border-left-color:${CATEGORY_COLOR[t.category || 'routine']}" title="${escapeHtml(t.title)}">
+        ${shown.map(en=> en.kind==='p' ? projCalChipHTML(en) : (t=>`<div class="cal-chip ${t.status==='done'?'done':''}" style="border-left-color:${CATEGORY_COLOR[t.category || 'routine']}" title="${escapeHtml(t.title)}">
           <input type="checkbox" class="task-done-cb" data-id="${t.id}" ${t.status==='done'?'checked':''} title="${t.status==='done'?'取消完成':'標記為完成'}">
           ${t.status==='done' ? checkedDateHTML(t.doneAt) : ''}
           <span class="cal-chip-title">${escapeHtml(t.title)}</span>
-        </div>`).join('')}
+        </div>`)(en.t)).join('')}
         ${more>0 ? `<span class="cal-more">+${more} 更多</span>` : ''}
       </div>`;
     }).join('');
@@ -1710,6 +1945,50 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       });
     });
     wireTaskDoneCheckboxes(grid);
+    wireProjItemCheckboxes(grid);
+  }
+
+  // ====== 專案細項 → 行事曆（顯示在開始日） ======
+  function projectCalEntries(dateStr){
+    const out = [];
+    (projects||[]).forEach(p=>{
+      if(p.syncCal === false) return;
+      if(categoryFilter !== 'all' && (p.category||'general') !== categoryFilter) return;
+      (p.items||[]).forEach(it=>{ if(it.start === dateStr) out.push({ p, it }); });
+    });
+    return out;
+  }
+  function projRangeText(it){
+    return (!it.end || it.end === it.start) ? pjMD(it.start) : `${pjMD(it.start)} → ${pjMD(it.end)}`;
+  }
+  function projCalChipHTML({ p, it }){
+    const done = !!it.done;
+    return `<div class="cal-chip proj ${done?'done':''}" style="border-left-color:${CATEGORY_COLOR[p.category||'general']}" title="📁 ${escapeHtml(p.name)}｜${escapeHtml(it.text)}｜${projRangeText(it)}（${pjWorkdays(it.start, it.end)}天）">
+      <input type="checkbox" class="proj-item-cb" data-pid="${p.id}" data-iid="${it.id}" ${done?'checked':''} title="${done?'取消完成':'標記為完成'}">
+      ${done ? checkedDateHTML(it.done) : ''}
+      <span class="cal-chip-title">📁 ${escapeHtml(it.text)}</span>
+    </div>`;
+  }
+  function wireProjItemCheckboxes(root){
+    root.querySelectorAll('.proj-item-cb').forEach(cb=>{
+      cb.addEventListener('click', e=> e.stopPropagation());
+      cb.addEventListener('change', ()=>{
+        const p = projects.find(x=>x.id===cb.dataset.pid);
+        const it = p && p.items.find(i=>i.id===cb.dataset.iid);
+        if(!it) return;
+        it.done = it.done ? null : Date.now();
+        persist(); renderAll();
+        showToast(it.done ? '細項完成 🎉' : '已改回未完成');
+      });
+    });
+  }
+  function goToProject(pid){
+    activeProjectId = pid;
+    editingProjectHead = false; editingProjItemId = null; editingProjDocId = null;
+    document.getElementById('dayPanel').classList.remove('open');
+    dayPanelDate = null;
+    switchView('projects');
+    renderProjects();
   }
 
   // 任務完成勾選框（行事曆格子＆當日側欄共用）
@@ -1764,11 +2043,27 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
           <span>${STATUS_LABEL[t.status]}</span>
         </div>
       </div>
-    `).join('') : `<div class="empty-col">此日尚無任務</div>`;
-    container.querySelectorAll('.task-card').forEach(card=>{
+    `).join('') : '';
+    const pe = projectCalEntries(dateStr);
+    container.innerHTML += pe.map(({p, it})=>`
+      <div class="task-card proj-card-link ${it.done?'done':''}" data-pid="${p.id}">
+        <span class="cat-badge" style="background:${CATEGORY_COLOR[p.category||'general']}">📁 ${escapeHtml(p.name)}</span>
+        <div class="t-title-row">
+          <input type="checkbox" class="proj-item-cb" data-pid="${p.id}" data-iid="${it.id}" ${it.done?'checked':''} title="${it.done?'取消完成':'標記為完成'}">
+          ${it.done ? checkedDateHTML(it.done) : ''}
+          <div class="t-title">${escapeHtml(it.text)}</div>
+        </div>
+        <div class="t-meta"><span>📅 ${projRangeText(it)}　·　${pjWorkdays(it.start, it.end)} 個工作天</span></div>
+      </div>`).join('');
+    if(!list.length && !pe.length) container.innerHTML = `<div class="empty-col">此日尚無任務</div>`;
+    container.querySelectorAll('.task-card:not(.proj-card-link)').forEach(card=>{
       card.addEventListener('click', ()=> openModal(card.dataset.id));
     });
+    container.querySelectorAll('.proj-card-link').forEach(card=>{
+      card.addEventListener('click', ()=> goToProject(card.dataset.pid));
+    });
     wireTaskDoneCheckboxes(container);
+    wireProjItemCheckboxes(container);
   }
 
   function openModal(id){
@@ -1800,13 +2095,670 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     editingId = null;
   }
 
+
+  // ====== 專案（時程＋產出文件） ======
+  const PJ_DOC_TYPES = {
+    ppt:{icon:'📊',label:'簡報'}, xls:{icon:'📗',label:'Excel'}, notice:{icon:'📢',label:'公告'},
+    chart:{icon:'📈',label:'圖表'}, doc:{icon:'📄',label:'文件'}, other:{icon:'📁',label:'其他'}
+  };
+  const PJ_SEED_PERF = [
+    ['2026-10-08','2026-10-08','第一次績效考核問題回饋簡報',''],
+    ['2026-10-12','2026-10-20','簡報修正',''],
+    ['2026-10-21','2026-10-28','敲與高層報告時間',''],
+    ['2026-10-27','2026-10-30','整理會議問題','10/29-11/1薪資計算'],
+    ['2026-10-23','2026-11-03','確認考核 / 面談名單+跟董事長要EXCEL',''],
+    ['2026-11-05','2026-11-11','系統修正與內部試跑',''],
+    ['2026-11-04','2026-11-10','入考核/面談系統確認+EXCEL薪資更新',''],
+    ['2026-11-09','2026-11-09','發考核公告',''],
+    ['2026-11-12','2026-11-27','自評+主管評核同步',''],
+    ['2026-11-25','2026-11-25','發評核到數+即將進入績效面談公告(一起)',''],
+    ['2026-11-30','2026-12-01','給董事長等第分佈圖','修訂後等第，分布圖:全公司+各部門+主管+自評'],
+    ['2026-12-01','2026-12-04','與確認董事長等第區間',''],
+    ['2026-11-30','2026-12-17','績效面談',''],
+    ['2026-12-21','2026-12-23','整理評語及分數到董事長年終EXCEL表',''],
+    ['2026-12-24','2026-12-24','給董事長年終EXCEL表',''],
+    ['2026-12-28','2027-01-05','追董事長總表',''],
+    ['2027-01-06','2027-01-08','最檢視及確認',''],
+    ['2027-01-11','2027-01-15','完成發放檔案',''],
+    ['2027-01-18','2027-01-18','預計發放',''],
+  ];
+  // 績效考核專案的預設產出文件：[類型, 文件名稱, 對應細項開頭文字]
+  const PJ_SEED_PERF_DOCS = [
+    ['ppt','績效考核問題回饋簡報（初版）','第一次績效考核問題回饋簡報'],
+    ['ppt','績效考核問題回饋簡報（修正版）','簡報修正'],
+    ['doc','會議問題整理紀錄','整理會議問題'],
+    ['xls','考核／面談名單','確認考核'],
+    ['xls','薪資更新 EXCEL','入考核/面談系統確認'],
+    ['notice','考核公告','發考核公告'],
+    ['notice','評核到數＋績效面談公告','發評核到數'],
+    ['chart','等第分佈圖（全公司／各部門／主管／自評）','給董事長等第分佈圖'],
+    ['xls','董事長年終 EXCEL 表','給董事長年終EXCEL表'],
+    ['xls','年終發放檔案','完成發放檔案'],
+  ];
+  function seedPerfDocs(p){
+    const byText = t => (p.items.find(i=>i.text.startsWith(t)) || {}).id || '';
+    return PJ_SEED_PERF_DOCS.map(([type,name,t])=>({ id: uid(), type, name, itemId: byText(t), link: '', done: null }));
+  }
+  function seedPerfProject(){
+    const p = {
+      id: uid(), name: '115下半年績效考核（年終）', category: 'perf', createdAt: Date.now(), syncCal: true,
+      items: PJ_SEED_PERF.map(([start,end,text,note])=>({ id: uid(), start, end, text, note, done: null })),
+      docs: []
+    };
+    p.docs = seedPerfDocs(p);
+    return p;
+  }
+
+  let projects = [];
+  let projectsSeeded = false;
+  let perfDocsSeeded = false;
+  let activeProjectId = null;
+  let addingProject = false;
+  let editingProjectHead = false;
+  let editingProjItemId = null;
+  let editingProjDocId = null;
+
+  const pjParse = s => new Date(s + 'T00:00:00');
+  const pjMD = s => { if(!s) return ''; const d = pjParse(s); return `${d.getMonth()+1}/${d.getDate()}`; };
+  const pjDateStr = d => `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+
+  // 工作天數：扣掉六日與國定假日
+  function pjWorkdays(a, b){
+    if(!a) return 0;
+    if(!b) b = a;
+    let n = 0;
+    const d = pjParse(a), end = pjParse(b);
+    if(end < d) return 0;
+    while(d <= end){
+      const w = d.getDay();
+      if(w !== 0 && w !== 6 && !TW_HOLIDAYS[pjDateStr(d)]) n++;
+      d.setDate(d.getDate() + 1);
+    }
+    return n;
+  }
+  function pjStatus(it){
+    if(it.done) return 'done';
+    const today = todayStr();
+    const end = it.end || it.start;
+    if(end < today) return 'late';
+    if(it.start <= today && today <= end) return 'now';
+    return 'todo';
+  }
+  function pjRange(p){
+    if(!p.items || !p.items.length) return null;
+    const s = p.items.map(i=>i.start).sort()[0];
+    const e = p.items.map(i=>i.end || i.start).sort().slice(-1)[0];
+    return [s, e];
+  }
+  function pjSortedItems(p){
+    return [...(p.items||[])].sort((a,b)=> a.start.localeCompare(b.start) || (a.end||a.start).localeCompare(b.end||b.start));
+  }
+  function pjDocDue(p, d){ const it = (p.items||[]).find(i=>i.id===d.itemId); return it ? (it.end || it.start) : null; }
+  function pjDoneTag(ts, suffix){
+    if(typeof ts !== 'number') return '';
+    const d = new Date(ts);
+    return `<span class="check-date" title="${fmtNoteDate(ts)}">✓ ${d.getMonth()+1}/${d.getDate()}${suffix||''}</span>`;
+  }
+  function pjCatOptions(sel){
+    return Object.keys(CATEGORY_LABEL).map(k=>`<option value="${k}" ${k===sel?'selected':''}>${CATEGORY_LABEL[k]}</option>`).join('');
+  }
+  function pjGuessDocType(name){
+    const n = (name||'').toLowerCase();
+    if(/簡報|ppt|投影片/.test(n)) return 'ppt';
+    if(/excel|xls|表單|名單|總表|試算|薪資/.test(n)) return 'xls';
+    if(/公告|通知|信件|email/.test(n)) return 'notice';
+    if(/圖|chart/.test(n)) return 'chart';
+    if(/表/.test(n)) return 'xls';
+    return 'doc';
+  }
+
+  function renderProjects(){
+    const side = document.getElementById('pjSide');
+    const detail = document.getElementById('pjDetail');
+    if(!side || !detail) return;
+    if(!projects.find(p=>p.id===activeProjectId)) activeProjectId = projects[0] ? projects[0].id : null;
+    side.innerHTML = projects.map(p=>{
+      const r = pjRange(p);
+      const done = p.items.filter(i=>i.done).length;
+      const pct = p.items.length ? Math.round(done/p.items.length*100) : 0;
+      const cat = p.category || 'general';
+      return `<div class="pj-card ${p.id===activeProjectId?'active':''}" data-id="${p.id}">
+        <span class="cat-badge" style="background:${CATEGORY_COLOR[cat]}">${CATEGORY_LABEL[cat]}</span>
+        <div class="pj-card-name">${escapeHtml(p.name)}</div>
+        <div class="pj-card-range">${r ? `${pjMD(r[0])} → ${pjMD(r[1])}　·　${done}/${p.items.length}` : '尚未安排細項'}</div>
+        <div class="pj-track"><div class="pj-fill" style="width:${pct}%"></div></div>
+      </div>`;
+    }).join('') + (addingProject ? `
+      <div class="pj-side-form">
+        <input type="text" id="pjNewName" placeholder="專案名稱">
+        <select id="pjNewCat">${pjCatOptions('perf')}</select>
+        <div class="pj-form-actions">
+          <button class="btn-ghost" id="pjNewCancel" type="button">取消</button>
+          <button class="btn-solid" id="pjNewSave" type="button">新增</button>
+        </div>
+      </div>` : `<button class="pj-add-btn" id="pjAddBtn" type="button">＋ 新增專案</button>`)
+      + `<button class="pj-add-btn" id="pjImportBtn" type="button">📥 從 Notion 匯入</button>`;
+
+    side.querySelectorAll('.pj-card').forEach(c=> c.addEventListener('click', ()=>{
+      activeProjectId = c.dataset.id; editingProjectHead = false; editingProjItemId = null; editingProjDocId = null; renderProjects();
+    }));
+    const addBtn = document.getElementById('pjAddBtn');
+    if(addBtn) addBtn.addEventListener('click', ()=>{ addingProject = true; renderProjects(); document.getElementById('pjNewName').focus(); });
+    const nc = document.getElementById('pjNewCancel');
+    if(nc) nc.addEventListener('click', ()=>{ addingProject = false; renderProjects(); });
+    const ns = document.getElementById('pjNewSave');
+    if(ns) ns.addEventListener('click', ()=>{
+      const name = document.getElementById('pjNewName').value.trim();
+      if(!name){ showToast('請輸入專案名稱'); return; }
+      const p = { id: uid(), name, category: document.getElementById('pjNewCat').value, createdAt: Date.now(), items: [], docs: [], syncCal: true };
+      projects.push(p); activeProjectId = p.id; addingProject = false;
+      persist(); renderProjects(); showToast('專案已新增');
+    });
+    document.getElementById('pjImportBtn').addEventListener('click', openProjImport);
+
+    const p = projects.find(x=>x.id===activeProjectId);
+    if(!p){
+      detail.innerHTML = `<div class="pj-empty">還沒有專案，點左邊「＋ 新增專案」或「📥 從 Notion 匯入」開始吧</div>`;
+      return;
+    }
+    detail.innerHTML = pjHeadHTML(p) + `<div class="pj-panel">${pjDocsHTML(p)}</div>`
+      + `<div class="pj-panel"><div class="pj-title">📊 時程圖 <span class="pj-hint">滑鼠移到色條上看日期，點色條可直接編輯</span></div>${pjGanttHTML(p)}</div>`
+      + `<div class="pj-panel">${pjItemsHTML(p)}</div>`;
+    wireProjectDetail(p, detail);
+  }
+
+  function pjHeadHTML(p){
+    const r = pjRange(p);
+    const cat = p.category || 'general';
+    const done = p.items.filter(i=>i.done).length;
+    const late = p.items.filter(i=>pjStatus(i)==='late').length;
+    const nowCnt = p.items.filter(i=>pjStatus(i)==='now').length;
+    const docsDone = p.docs.filter(d=>d.done).length;
+    if(editingProjectHead){
+      return `<div class="pj-panel"><div class="pj-head">
+        <div class="pj-head-form">
+          <input type="text" id="pjHeadName" value="${escapeHtml(p.name)}">
+          <select id="pjHeadCat">${pjCatOptions(cat)}</select>
+          <button class="btn-ghost" id="pjHeadCancel" type="button">取消</button>
+          <button class="btn-solid" id="pjHeadSave" type="button">儲存</button>
+        </div>
+      </div></div>`;
+    }
+    return `<div class="pj-panel"><div class="pj-head">
+      <div>
+        <span class="cat-badge" style="background:${CATEGORY_COLOR[cat]}">${CATEGORY_LABEL[cat]}</span>
+        <h2>${escapeHtml(p.name)}</h2>
+        <div class="pj-meta">
+          ${r ? `<span class="pj-pill">📅 ${pjMD(r[0])} → ${pjMD(r[1])}</span>` : ''}
+          <span class="pj-pill">✅ 完成 ${done}/${p.items.length}</span>
+          <span class="pj-pill">📂 文件 ${docsDone}/${p.docs.length}</span>
+          ${nowCnt ? `<span class="pj-pill now">⏳ 進行中 ${nowCnt}</span>` : ''}
+          ${late ? `<span class="pj-pill warn">⏰ 逾期 ${late}</span>` : ''}
+        </div>
+        <label class="pj-sync"><input type="checkbox" id="pjSync" ${p.syncCal !== false ? 'checked' : ''}> 細項顯示在行事曆上（排在開始日期）</label>
+      </div>
+      <div class="pj-spacer"></div>
+      <button class="btn-mini" id="pjHeadEdit" type="button">✎ 編輯專案</button>
+      <button class="btn-mini" id="pjHeadDel" type="button">✕ 刪除專案</button>
+    </div></div>`;
+  }
+
+  function pjDocsHTML(p){
+    const docs = [...p.docs].sort((a,b)=> (pjDocDue(p,a)||'9999').localeCompare(pjDocDue(p,b)||'9999'));
+    const done = p.docs.filter(d=>d.done).length;
+    const counts = {};
+    p.docs.forEach(d=> counts[d.type] = (counts[d.type]||0) + 1);
+    const today = todayStr();
+    const itemOpts = sel => `<option value="">（不綁定細項）</option>` + pjSortedItems(p)
+      .map(i=>`<option value="${i.id}" ${i.id===sel?'selected':''}>${pjMD(i.end||i.start)}　${escapeHtml(i.text)}</option>`).join('');
+    const typeOpts = sel => Object.entries(PJ_DOC_TYPES).map(([k,v])=>`<option value="${k}" ${k===sel?'selected':''}>${v.icon} ${v.label}</option>`).join('');
+    const rows = docs.map(d=>{
+      if(editingProjDocId === d.id){
+        return `<div class="pj-doc-row editing" data-id="${d.id}">
+          <select class="pjd-type">${typeOpts(d.type)}</select>
+          <input type="text" class="pjd-name" value="${escapeHtml(d.name)}">
+          <select class="pjd-item">${itemOpts(d.itemId)}</select>
+          <input type="text" class="pjd-link" value="${escapeHtml(d.link)}" placeholder="檔案連結（選填）">
+          <div style="display:flex;gap:6px"><button class="btn-ghost pjd-cancel" type="button">取消</button><button class="btn-solid pjd-save" type="button">儲存</button></div>
+        </div>`;
+      }
+      const it = p.items.find(i=>i.id===d.itemId);
+      const due = pjDocDue(p, d);
+      const late = !d.done && due && due < today;
+      const t = PJ_DOC_TYPES[d.type] || PJ_DOC_TYPES.other;
+      const safeLink = /^https?:\/\//i.test(d.link||'') ? d.link : '';
+      return `<div class="pj-doc-row ${d.done?'done':''} ${late?'late':''}" data-id="${d.id}">
+        <input type="checkbox" class="pjd-cb" ${d.done?'checked':''} title="標記為已產出">
+        <div class="pj-doc-icon" title="${t.label}">${t.icon}</div>
+        <div><div class="pj-doc-name">${escapeHtml(d.name)}${safeLink?`<a href="${escapeHtml(safeLink)}" target="_blank" rel="noopener">🔗開啟</a>`:''}</div>
+          <div class="pj-doc-sub">${t.label} ${pjDoneTag(d.done, ' 產出')}</div></div>
+        <div class="pj-doc-item" title="${it?escapeHtml(it.text):''}">${it ? '↳ '+escapeHtml(it.text) : '<span style="color:var(--ink-faint)">未綁定細項</span>'}</div>
+        <div class="pj-doc-due ${late?'late':''}">${due ? (late?'⏰ ':'') + pjMD(due) + ' 前' : '—'}</div>
+        <div class="pj-c-act"><button class="check-item-edit-btn pjd-ed" type="button" title="編輯">✎</button><button class="check-item-del-btn pjd-del" type="button" title="刪除">✕</button></div>
+      </div>`;
+    }).join('');
+    return `
+      <div class="pj-title">📂 產出文件 <span class="pj-hint">這個專案要交出哪些文件；截止日跟著對應細項的結束日</span></div>
+      <div class="pj-doc-summary">
+        <span class="pj-pill">已產出 ${done}/${p.docs.length}</span>
+        ${Object.entries(counts).map(([k,n])=>`<span class="pj-pill">${(PJ_DOC_TYPES[k]||PJ_DOC_TYPES.other).icon} ${(PJ_DOC_TYPES[k]||PJ_DOC_TYPES.other).label} ${n}</span>`).join('')}
+      </div>
+      <div class="pj-doc-list">${rows || '<div class="empty-col">— 尚未列出要產出的文件 —</div>'}</div>
+      <div class="pj-add-form pj-doc-add">
+        <label>類型<select id="pjdType">${typeOpts('doc')}</select></label>
+        <label>文件／資料名稱<input type="text" id="pjdName" placeholder="例如：等第分佈圖"></label>
+        <label>對應細項（決定截止日）<select id="pjdItem">${itemOpts('')}</select></label>
+        <label>檔案連結（選填）<input type="text" id="pjdLink" placeholder="雲端硬碟／Notion 網址"></label>
+        <button class="btn-solid" id="pjdAdd" type="button">＋ 新增文件</button>
+      </div>`;
+  }
+
+  function pjGanttHTML(p){
+    if(!p.items.length) return '<div class="empty-col">新增細項後，這裡會自動畫出時程圖</div>';
+    const [s, e] = pjRange(p);
+    const start = pjParse(s); start.setDate(1);
+    const endD = pjParse(e);
+    const end = new Date(endD.getFullYear(), endD.getMonth()+1, 0);
+    const total = Math.round((end - start)/86400000) + 1;
+    const pos = str => (Math.round((pjParse(str) - start)/86400000)) / total * 100;
+    let months = '', lines = '';
+    const m = new Date(start);
+    while(m <= end){
+      const left = (Math.round((m - start)/86400000))/total*100;
+      months += `<span class="pj-g-month" style="left:${left}%">${m.getMonth()+1}月</span>`;
+      if(left > 0) lines += `<span class="mline" style="left:${left}%"></span>`;
+      m.setMonth(m.getMonth()+1);
+    }
+    const today = todayStr();
+    if(today >= pjDateStr(start) && today <= pjDateStr(end)){
+      lines += `<span class="today" style="left:${pos(today)}%"><span>今天 ${pjMD(today)}</span></span>`;
+    }
+    const color = CATEGORY_COLOR[p.category || 'general'];
+    const rows = pjSortedItems(p).map(it=>{
+      const st = pjStatus(it);
+      const l = pos(it.start), w = (pos(it.end || it.start) - l) + 100/total;
+      return `<div class="pj-g-row">
+        <div class="pj-g-label ${st==='done'?'done':''}" title="${escapeHtml(it.text)}">${escapeHtml(it.text)}</div>
+        <div class="pj-g-track"><div class="pj-g-bar ${st}" data-id="${it.id}" style="left:${l}%;width:${w}%;background:${st==='done'?'var(--green)':color}"
+          title="${escapeHtml(it.text)}｜${pjMD(it.start)}${it.end && it.end!==it.start ? ' → '+pjMD(it.end) : ''}（${pjWorkdays(it.start, it.end)}天）"></div></div>
+      </div>`;
+    }).join('');
+    return `<div class="pj-gantt">
+      <div class="pj-g-head"><div></div><div class="pj-g-months">${months}</div></div>
+      <div class="pj-g-grid">${lines}</div>
+      ${rows}
+    </div>
+    <div class="pj-legend">
+      <span><i style="background:${color}"></i>預計時程</span>
+      <span><i style="background:var(--green);opacity:.5"></i>已完成</span>
+      <span><i style="background:#fff;box-shadow:0 0 0 2px var(--rose)"></i>已逾期未完成</span>
+      <span><i style="background:var(--coral);width:3px"></i>今天</span>
+    </div>`;
+  }
+
+  function pjItemsHTML(p){
+    const rows = pjSortedItems(p).map(it=>{
+      if(editingProjItemId === it.id){
+        return `<tr class="pj-edit-row" data-id="${it.id}">
+          <td></td>
+          <td colspan="2"><div class="pj-dates"><input type="date" class="pje-start" value="${it.start}"> → <input type="date" class="pje-end" value="${it.end||''}"></div></td>
+          <td><input type="text" class="pje-text" value="${escapeHtml(it.text)}"></td>
+          <td class="pj-c-docs"></td>
+          <td class="pj-c-note"><input type="text" class="pje-note" value="${escapeHtml(it.note)}" placeholder="備註"></td>
+          <td class="pj-c-act"><button class="btn-ghost pje-cancel" type="button" style="padding:5px 10px">取消</button> <button class="btn-solid pje-save" type="button" style="padding:6px 12px">儲存</button></td>
+        </tr>`;
+      }
+      const st = pjStatus(it);
+      const dateTxt = (!it.end || it.end === it.start) ? pjMD(it.start) : `${pjMD(it.start)}<span class="arrow">→</span>${pjMD(it.end)}`;
+      const stTag = st==='late' ? '<span class="pj-status late">逾期</span>' : st==='now' ? '<span class="pj-status now">進行中</span>' : '';
+      const docs = p.docs.filter(d=>d.itemId===it.id)
+        .map(d=>`<span class="pj-doc-chip ${d.done?'done':''}">${(PJ_DOC_TYPES[d.type]||PJ_DOC_TYPES.other).icon} ${escapeHtml(d.name)}</span>`).join('');
+      return `<tr class="${st}" data-id="${it.id}">
+        <td class="pj-c-check"><input type="checkbox" class="pji-cb" ${it.done?'checked':''}></td>
+        <td class="pj-c-date">${dateTxt}</td>
+        <td><span class="pj-days">${pjWorkdays(it.start, it.end)}天</span></td>
+        <td><span class="pj-text">${escapeHtml(it.text)}</span>${pjDoneTag(it.done)}${stTag}</td>
+        <td class="pj-c-docs">${docs}</td>
+        <td class="pj-c-note">${escapeHtml(it.note)}</td>
+        <td class="pj-c-act"><button class="check-item-edit-btn pji-ed" type="button" title="編輯">✎</button><button class="check-item-del-btn pji-del" type="button" title="刪除">✕</button></td>
+      </tr>`;
+    }).join('');
+    return `
+      <div class="pj-title">📝 細項安排 <span class="pj-hint">依開始日期自動排序；工作天數會扣掉六日與國定假日</span></div>
+      <table class="pj-tbl">
+        <thead><tr><th></th><th>日期</th><th>工作天數</th><th>項目內容</th><th class="pj-c-docs">產出文件</th><th class="pj-c-note">備註</th><th></th></tr></thead>
+        <tbody>${rows || '<tr><td colspan="7"><div class="empty-col">— 尚無細項 —</div></td></tr>'}</tbody>
+      </table>
+      <div class="pj-add-form">
+        <label>開始日期<input type="date" id="pjiStart"></label>
+        <label>結束日期（單日可留空）<input type="date" id="pjiEnd"></label>
+        <label>項目內容<input type="text" id="pjiText" placeholder="例如：發考核公告"></label>
+        <label>備註<input type="text" id="pjiNote" placeholder="選填"></label>
+        <button class="btn-solid" id="pjiAdd" type="button">＋ 新增細項</button>
+        <div class="pj-live-days" id="pjiLive"></div>
+      </div>`;
+  }
+
+  function wireProjectDetail(p, root){
+    const $ = id => document.getElementById(id);
+    // 專案標題
+    if($('pjHeadEdit')) $('pjHeadEdit').addEventListener('click', ()=>{ editingProjectHead = true; renderProjects(); });
+    if($('pjHeadCancel')) $('pjHeadCancel').addEventListener('click', ()=>{ editingProjectHead = false; renderProjects(); });
+    if($('pjHeadSave')) $('pjHeadSave').addEventListener('click', ()=>{
+      const name = $('pjHeadName').value.trim();
+      if(!name){ showToast('專案名稱不能是空的'); return; }
+      p.name = name; p.category = $('pjHeadCat').value; editingProjectHead = false;
+      persist(); renderProjects(); showToast('專案已更新');
+    });
+    if($('pjSync')) $('pjSync').addEventListener('change', e=>{
+      p.syncCal = e.target.checked;
+      persist(); renderAll();
+      showToast(p.syncCal ? '已顯示在行事曆' : '已從行事曆隱藏');
+    });
+    if($('pjHeadDel')) $('pjHeadDel').addEventListener('click', async ()=>{
+      const ok = await askConfirm(`確定要刪除「${p.name}」整個專案嗎？裡面的細項和文件都會一起刪除。`);
+      if(!ok) return;
+      projects = projects.filter(x=>x!==p);
+      persist(); renderProjects(); showToast('專案已刪除');
+    });
+
+    // 產出文件
+    root.querySelectorAll('.pj-doc-row').forEach(row=>{
+      const d = p.docs.find(x=>x.id===row.dataset.id);
+      if(!d) return;
+      const cb = row.querySelector('.pjd-cb');
+      if(cb) cb.addEventListener('change', ()=>{ d.done = d.done ? null : Date.now(); persist(); renderProjects(); });
+      const ed = row.querySelector('.pjd-ed');
+      if(ed) ed.addEventListener('click', ()=>{ editingProjDocId = d.id; renderProjects(); });
+      const cancel = row.querySelector('.pjd-cancel');
+      if(cancel) cancel.addEventListener('click', ()=>{ editingProjDocId = null; renderProjects(); });
+      const del = row.querySelector('.pjd-del');
+      if(del) del.addEventListener('click', async ()=>{
+        if(!(await askConfirm('確定要刪除這份文件嗎？'))) return;
+        p.docs = p.docs.filter(x=>x!==d); persist(); renderProjects(); showToast('文件已刪除');
+      });
+      const sv = row.querySelector('.pjd-save');
+      if(sv) sv.addEventListener('click', ()=>{
+        const name = row.querySelector('.pjd-name').value.trim();
+        if(!name){ showToast('請填文件名稱'); return; }
+        Object.assign(d, { name, type: row.querySelector('.pjd-type').value, itemId: row.querySelector('.pjd-item').value, link: row.querySelector('.pjd-link').value.trim() });
+        editingProjDocId = null; persist(); renderProjects(); showToast('文件已更新');
+      });
+    });
+    $('pjdName').addEventListener('input', ()=>{ $('pjdType').value = pjGuessDocType($('pjdName').value); });
+    $('pjdAdd').addEventListener('click', ()=>{
+      const name = $('pjdName').value.trim();
+      if(!name){ showToast('請填文件名稱'); return; }
+      p.docs.push({ id: uid(), type: $('pjdType').value, name, itemId: $('pjdItem').value, link: $('pjdLink').value.trim(), done: null });
+      persist(); renderProjects(); showToast('文件已新增');
+    });
+
+    // 時程圖點擊 → 編輯細項
+    root.querySelectorAll('.pj-g-bar').forEach(b=> b.addEventListener('click', ()=>{
+      editingProjItemId = b.dataset.id; renderProjects();
+      const row = document.querySelector('.pj-edit-row');
+      if(row) row.scrollIntoView({ behavior:'smooth', block:'center' });
+    }));
+
+    // 細項
+    root.querySelectorAll('.pj-tbl tr[data-id]').forEach(tr=>{
+      const it = p.items.find(i=>i.id===tr.dataset.id);
+      if(!it) return;
+      const cb = tr.querySelector('.pji-cb');
+      if(cb) cb.addEventListener('change', ()=>{ it.done = it.done ? null : Date.now(); persist(); renderProjects(); });
+      const ed = tr.querySelector('.pji-ed');
+      if(ed) ed.addEventListener('click', ()=>{ editingProjItemId = it.id; renderProjects(); });
+      const cancel = tr.querySelector('.pje-cancel');
+      if(cancel) cancel.addEventListener('click', ()=>{ editingProjItemId = null; renderProjects(); });
+      const del = tr.querySelector('.pji-del');
+      if(del) del.addEventListener('click', async ()=>{
+        if(!(await askConfirm('確定要刪除這個細項嗎？'))) return;
+        p.items = p.items.filter(i=>i!==it);
+        p.docs.forEach(d=>{ if(d.itemId===it.id) d.itemId = ''; });
+        persist(); renderProjects(); showToast('細項已刪除');
+      });
+      const sv = tr.querySelector('.pje-save');
+      if(sv) sv.addEventListener('click', ()=>{
+        const s = tr.querySelector('.pje-start').value, e = tr.querySelector('.pje-end').value;
+        const t = tr.querySelector('.pje-text').value.trim();
+        if(!s || !t){ showToast('開始日期和項目內容必填'); return; }
+        if(e && e < s){ showToast('結束日期不能早於開始日期'); return; }
+        Object.assign(it, { start: s, end: e || s, text: t, note: tr.querySelector('.pje-note').value.trim() });
+        editingProjItemId = null; persist(); renderProjects(); showToast('細項已更新');
+      });
+    });
+    const upd = ()=>{ $('pjiLive').textContent = $('pjiStart').value ? `→ 共 ${pjWorkdays($('pjiStart').value, $('pjiEnd').value || $('pjiStart').value)} 個工作天` : ''; };
+    $('pjiStart').addEventListener('input', upd);
+    $('pjiEnd').addEventListener('input', upd);
+    $('pjiAdd').addEventListener('click', ()=>{
+      const s = $('pjiStart').value, e = $('pjiEnd').value || s, t = $('pjiText').value.trim();
+      if(!s || !t){ showToast('請填開始日期和項目內容'); return; }
+      if(e < s){ showToast('結束日期不能早於開始日期'); return; }
+      p.items.push({ id: uid(), start: s, end: e, text: t, note: $('pjiNote').value.trim(), done: null });
+      persist(); renderProjects(); showToast('細項已新增');
+    });
+  }
+
+  // ====== 從 Notion 匯入（貼上表格或 CSV 檔） ======
+  let pjImportRows = [];
+
+  function openProjImport(){
+    const tgt = document.getElementById('pjImpTarget');
+    tgt.innerHTML = `<option value="__new">＋ 建立新專案</option>` + projects.map(p=>`<option value="${p.id}">${escapeHtml(p.name)}</option>`).join('');
+    document.getElementById('pjImpCat').innerHTML = pjCatOptions('perf');
+    document.getElementById('pjImpName').value = '';
+    document.getElementById('pjImpText').value = '';
+    document.getElementById('pjImpYear').value = new Date().getFullYear();
+    document.getElementById('pjImpFileName').textContent = '';
+    pjImpToggleTarget();
+    pjImpRefresh();
+    document.getElementById('pjImportOverlay').classList.remove('hidden');
+  }
+  function closeProjImport(){ document.getElementById('pjImportOverlay').classList.add('hidden'); }
+  function pjImpToggleTarget(){
+    const isNew = document.getElementById('pjImpTarget').value === '__new';
+    document.getElementById('pjImpNewWrap').style.display = isNew ? '' : 'none';
+    document.getElementById('pjImpCatWrap').style.display = isNew ? '' : 'none';
+    document.getElementById('pjImpModeWrap').style.display = isNew ? 'none' : '';
+  }
+
+  // 解析 CSV / TSV / Markdown 表格
+  function pjParseTable(text){
+    text = (text||'').replace(/^﻿/, '').replace(/\r\n?/g, '\n').trim();
+    if(!text) return [];
+    const lines = text.split('\n');
+    if(lines[0].trim().startsWith('|')){
+      return lines.filter(l=> l.trim().startsWith('|'))
+        .filter(l=> !/^\s*\|(\s*:?-+:?\s*\|)+\s*$/.test(l))
+        .map(l=> l.trim().replace(/^\|/,'').replace(/\|$/,'').split('|').map(c=>c.trim()));
+    }
+    const delim = lines[0].includes('\t') ? '\t' : ',';
+    const rows = []; let row = [], cell = '', q = false;
+    for(let i=0;i<text.length;i++){
+      const ch = text[i];
+      if(q){
+        if(ch === '"'){ if(text[i+1] === '"'){ cell += '"'; i++; } else q = false; }
+        else cell += ch;
+      } else if(ch === '"' && cell === ''){ q = true; }
+      else if(ch === delim){ row.push(cell.trim()); cell = ''; }
+      else if(ch === '\n'){ row.push(cell.trim()); rows.push(row); row = []; cell = ''; }
+      else cell += ch;
+    }
+    row.push(cell.trim()); rows.push(row);
+    return rows.filter(r=> r.some(c=>c !== ''));
+  }
+
+  const PJ_MONTHS_EN = { jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12 };
+  // 回傳 {y|null, m, d}
+  function pjParseOneDate(s){
+    s = (s||'').trim();
+    if(!s) return null;
+    let m;
+    if((m = s.match(/(\d{4})\s*[-\/.年]\s*(\d{1,2})\s*[-\/.月]\s*(\d{1,2})/))) return { y:+m[1], m:+m[2], d:+m[3] };
+    if((m = s.match(/([A-Za-z]{3,})\.?\s+(\d{1,2}),?\s*(\d{4})?/)) && PJ_MONTHS_EN[m[1].slice(0,3).toLowerCase()])
+      return { y: m[3] ? +m[3] : null, m: PJ_MONTHS_EN[m[1].slice(0,3).toLowerCase()], d:+m[2] };
+    if((m = s.match(/(\d{1,2})\s*月\s*(\d{1,2})/))) return { y:null, m:+m[1], d:+m[2] };
+    if((m = s.match(/^(\d{1,2})\s*[\/\-.\s]\s*(\d{1,2})$/))) return { y:null, m:+m[1], d:+m[2] };
+    return null;
+  }
+  function pjSplitRange(s){
+    return (s||'').split(/\s*(?:→|->|➝|➜|~|～|至|到|–|—|\s-\s)\s*/).filter(Boolean);
+  }
+  function pjValidYMD(y, m, d){
+    const dt = new Date(y, m-1, d);
+    return dt.getFullYear()===y && dt.getMonth()===m-1 && dt.getDate()===d ? pjDateStr(dt) : null;
+  }
+
+  function pjImpRefresh(){
+    const text = document.getElementById('pjImpText').value;
+    const baseYear = parseInt(document.getElementById('pjImpYear').value, 10) || new Date().getFullYear();
+    const table = pjParseTable(text);
+    const box = document.getElementById('pjImpPreview');
+    const btn = document.getElementById('pjImpOk');
+    pjImportRows = [];
+    if(table.length === 0){
+      box.innerHTML = '<div class="pj-imp-msg">貼上資料或選擇 CSV 檔後，這裡會顯示預覽</div>';
+      btn.textContent = '匯入'; btn.disabled = true; return;
+    }
+    // 找欄位
+    const head = table[0].map(h=>h.replace(/^[^\w一-鿿]+/, '').toLowerCase());
+    const find = re => head.findIndex(h=>re.test(h));
+    let col = {
+      start: find(/開始|start/), end: find(/結束|截止|end|due/),
+      date: find(/date|日期|時間|期間|時程/), text: find(/項目|內容|名稱|任務|工作項|name|title|task/),
+      note: find(/備註|說明|note|memo/), docs: find(/產出|文件|資料|output|deliverable/), done: find(/完成|done|狀態|status/)
+    };
+    let body = table;
+    const hasHeader = col.text >= 0 || col.date >= 0 || col.start >= 0;
+    if(hasHeader) body = table.slice(1);
+    else {
+      // 沒有標題列：依你 Notion 表的欄位順序猜（日期｜工作天數｜項目內容｜備註）
+      const n = table[0].length;
+      col = { start:-1, end:-1, date:0, text: n >= 3 ? 2 : 1, note: n >= 4 ? 3 : -1, docs:-1, done:-1 };
+    }
+    let last = null, curYear = baseYear;
+    const out = [];
+    body.forEach(r=>{
+      const get = i => (i >= 0 && i < r.length) ? r[i] : '';
+      const text = get(col.text).trim();
+      let sRaw, eRaw;
+      if(col.start >= 0){ sRaw = get(col.start); eRaw = get(col.end); }
+      else { const parts = pjSplitRange(get(col.date)); sRaw = parts[0]; eRaw = parts[1]; }
+      const sp = pjParseOneDate(sRaw), ep = pjParseOneDate(eRaw);
+      let start = null, end = null;
+      if(sp){
+        let y = sp.y;
+        if(y == null){
+          y = curYear;
+          const cand = pjValidYMD(y, sp.m, sp.d);
+          if(last && cand && (pjParse(last) - pjParse(cand)) / 86400000 > 150){ y++; }
+        }
+        start = pjValidYMD(y, sp.m, sp.d);
+        if(start){ curYear = pjParse(start).getFullYear(); last = start; }
+      }
+      if(start && ep){
+        let y = ep.y != null ? ep.y : pjParse(start).getFullYear();
+        end = pjValidYMD(y, ep.m, ep.d);
+        if(end && ep.y == null && end < start) end = pjValidYMD(y+1, ep.m, ep.d);
+      }
+      if(start && !end) end = start;
+      if(start && end && end < start) end = start;
+      const doneRaw = get(col.done).toLowerCase();
+      out.push({
+        start, end, text, note: get(col.note).trim(),
+        docs: get(col.docs).split(/[,，、;；\n]/).map(x=>x.trim()).filter(Boolean),
+        done: /^(yes|true|✓|✔|v|完成|已完成|done|checked)$/.test(doneRaw),
+        ok: !!(start && text)
+      });
+    });
+    pjImportRows = out;
+    const okCount = out.filter(r=>r.ok).length;
+    box.innerHTML = `<table><thead><tr><th>日期</th><th>天數</th><th>項目內容</th><th>產出文件</th><th>備註</th></tr></thead><tbody>${
+      out.map(r=>`<tr class="${r.ok?'':'bad'}">
+        <td style="white-space:nowrap">${r.start ? (r.end && r.end!==r.start ? `${r.start} → ${r.end}` : r.start) : '⚠️ 看不懂日期'}</td>
+        <td>${r.start ? pjWorkdays(r.start, r.end)+'天' : ''}</td>
+        <td>${escapeHtml(r.text) || '⚠️ 沒有內容'}${r.done?' ✅':''}</td>
+        <td>${r.docs.map(escapeHtml).join('、')}</td>
+        <td>${escapeHtml(r.note)}</td></tr>`).join('')
+    }</tbody></table>${okCount < out.length ? `<div class="pj-imp-msg">⚠️ 紅字的 ${out.length-okCount} 列會略過（缺日期或內容）</div>` : ''}`;
+    btn.textContent = `匯入 ${okCount} 筆`;
+    btn.disabled = okCount === 0;
+  }
+
+  async function pjImpConfirm(){
+    const rows = pjImportRows.filter(r=>r.ok);
+    if(!rows.length) return;
+    const tgt = document.getElementById('pjImpTarget').value;
+    let p;
+    if(tgt === '__new'){
+      const name = document.getElementById('pjImpName').value.trim();
+      if(!name){ showToast('請輸入新專案名稱'); return; }
+      p = { id: uid(), name, category: document.getElementById('pjImpCat').value, createdAt: Date.now(), items: [], docs: [], syncCal: true };
+      projects.push(p);
+    } else {
+      p = projects.find(x=>x.id===tgt);
+      if(!p) return;
+      if(document.getElementById('pjImpMode').value === 'replace'){
+        const ok = await askConfirm(`會清空「${p.name}」原本的 ${p.items.length} 個細項（產出文件保留但會解除對應），確定嗎？`);
+        if(!ok) return;
+        p.items = [];
+        p.docs.forEach(d=> d.itemId = '');
+      }
+    }
+    rows.forEach(r=>{
+      const it = { id: uid(), start: r.start, end: r.end, text: r.text, note: r.note, done: r.done ? Date.now() : null };
+      p.items.push(it);
+      r.docs.forEach(name=> p.docs.push({ id: uid(), type: pjGuessDocType(name), name, itemId: it.id, link: '', done: null }));
+    });
+    activeProjectId = p.id;
+    closeProjImport();
+    persist();
+    renderProjects();
+    showToast(`已匯入 ${rows.length} 個細項`);
+  }
+
+  function wireProjImport(){
+    document.getElementById('pjImportClose').addEventListener('click', closeProjImport);
+    document.getElementById('pjImpCancel').addEventListener('click', closeProjImport);
+    document.getElementById('pjImportOverlay').addEventListener('click', e=>{ if(e.target.id === 'pjImportOverlay') closeProjImport(); });
+    document.getElementById('pjImpTarget').addEventListener('change', pjImpToggleTarget);
+    document.getElementById('pjImpText').addEventListener('input', pjImpRefresh);
+    document.getElementById('pjImpYear').addEventListener('input', pjImpRefresh);
+    // 從 Notion 直接複製表格時，優先讀 HTML 表格格式
+    document.getElementById('pjImpText').addEventListener('paste', e=>{
+      const html = e.clipboardData && e.clipboardData.getData('text/html');
+      if(!html || !/<table/i.test(html)) return;
+      const doc = new DOMParser().parseFromString(html, 'text/html');
+      const trs = Array.from(doc.querySelectorAll('tr'));
+      if(!trs.length) return;
+      e.preventDefault();
+      const tsv = trs.map(tr=> Array.from(tr.querySelectorAll('th,td')).map(td=> td.textContent.replace(/\s+/g,' ').trim()).join('\t')).join('\n');
+      e.target.value = tsv;
+      pjImpRefresh();
+    });
+    document.getElementById('pjImpFileBtn').addEventListener('click', ()=> document.getElementById('pjImpFile').click());
+    document.getElementById('pjImpFile').addEventListener('change', async e=>{
+      const f = e.target.files[0];
+      e.target.value = '';
+      if(!f) return;
+      document.getElementById('pjImpText').value = await f.text();
+      document.getElementById('pjImpFileName').textContent = '已讀取：' + f.name;
+      const base = f.name.replace(/\.[^.]+$/, '').replace(/\s+[0-9a-f]{32}$/i, '');
+      if(document.getElementById('pjImpTarget').value === '__new' && !document.getElementById('pjImpName').value) document.getElementById('pjImpName').value = base;
+      pjImpRefresh();
+    });
+    document.getElementById('pjImpOk').addEventListener('click', pjImpConfirm);
+  }
+  wireProjImport();
+
   function switchView(view){
     currentView = view;
     document.querySelectorAll('.vt-btn').forEach(b=> b.classList.toggle('active', b.dataset.view===view));
     document.getElementById('kanbanView').classList.toggle('hidden', view!=='kanban');
     document.getElementById('calendarView').classList.toggle('hidden', view!=='calendar');
     document.getElementById('notesView').classList.toggle('hidden', view!=='notes');
-    document.getElementById('filterStrip').classList.toggle('hidden', view==='kanban');
+    document.getElementById('projectsView').classList.toggle('hidden', view!=='projects');
+    document.getElementById('filterStrip').classList.toggle('hidden', view==='kanban' || view==='projects');
   }
 
   function populateNoteCategorySelect(){
@@ -2016,7 +2968,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   }
 
   document.getElementById('exportBtn').addEventListener('click', ()=>{
-    const dataStr = JSON.stringify({ tasks, notes }, null, 2);
+    const dataStr = JSON.stringify({ tasks, notes, projects }, null, 2);
     const blob = new Blob([dataStr], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -2054,6 +3006,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       if(!ok) return;
       tasks = importedTasks;
       notes = importedNotes;
+      if(imported && Array.isArray(imported.projects)){ projects = imported.projects; projectsSeeded = true; }
       await persist();
       renderAll();
       showToast('匯入成功！');
