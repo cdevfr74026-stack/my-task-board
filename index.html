@@ -475,14 +475,16 @@ button.stat-chip{ cursor:pointer; transition: all .15s ease; }
 .cal-today:hover{ color: #fff; background: var(--coral); border-color: var(--coral); }
 
 .cal-weekdays{
-  display:grid; grid-template-columns: repeat(7,1fr);
+  display:grid; grid-template-columns: repeat(7,minmax(0,1fr));
   font-family: var(--font-display); font-weight:700; font-size:12px; color: var(--coral);
   padding: 0 2px 8px;
 }
 .cal-weekdays span{ text-align:center; }
 .cal-weekdays span:first-child, .cal-weekdays span:last-child{ color: var(--rose); }
 
-.cal-grid{ display:grid; grid-template-columns: repeat(7,1fr); gap:7px; }
+.cal-grid{ display:grid; grid-template-columns: repeat(7,minmax(0,1fr)); gap:7px; }
+.cal-cell{ min-width:0; overflow:hidden; }
+.cal-chip{ min-width:0; }
 .cal-cell{
   background: var(--panel);
   border: 2px solid var(--grid-line);
@@ -1663,8 +1665,9 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       const dateStr = `${y}-${String(m+1).padStart(2,'0')}-${String(d).padStart(2,'0')}`;
       cells.push({ day:d, out:false, dateStr });
     }
+    let nextDay = 1;
     while(cells.length % 7 !== 0){
-      cells.push({ day: cells.length, out:true, dateStr:null });
+      cells.push({ day: nextDay++, out:true, dateStr:null });
     }
     const today = todayStr();
     const pool = visibleTasks();
