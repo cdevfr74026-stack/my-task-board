@@ -996,6 +996,9 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   let checklistChecks = {};
   let newHires = [];
   let departures = [];
+  let leaves = []; // 留停／復職 { id, name, type:'leave'|'return', done, createdAt }
+  let addingLeave = false;
+  let editingLeaveId = null;
   let checklistMonth = (()=>{ const n = new Date(); return { y: n.getFullYear(), m: n.getMonth()+1 }; })();
   let editingChecklistItemId = null;
   let editingHireId = null;
@@ -1102,6 +1105,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         notes = data.notes || [];
         newHires = data.newHires || [];
         departures = data.departures || [];
+        leaves = data.leaves || [];
         checklistChecks = data.checklistChecks || {};
         collapsedSections = data.collapsedSections || {};
         projects = Array.isArray(data.projects) ? data.projects : [];
@@ -1147,6 +1151,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     notes = [];
     newHires = [];
     departures = [];
+    leaves = [];
     checklistItems = [];
     checklistChecks = {};
     collapsedSections = {};
@@ -1158,7 +1163,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   async function persist(){
     if(!firebaseReady) return;
     try{
-      await taskDocRef.set({ tasks, notes, checklistItems, checklistChecks, newHires, departures, collapsedSections, projects, projectsSeeded, perfDocsSeeded });
+      await taskDocRef.set({ tasks, notes, checklistItems, checklistChecks, newHires, departures, leaves, collapsedSections, projects, projectsSeeded, perfDocsSeeded });
     }catch(e){
       console.error(e);
       showToast('儲存到雲端失敗，請重試');
@@ -1501,7 +1506,6 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
               <option value="general" ${person.type==='general'?'selected':''}>一般</option>
             </select>
             <div class="month-picker-label">※ 更換類型會把細項重設為該類型的預設清單</div>` : ''}
-          ${monthCheckboxesHTML(person.months, 'editperson')}
           <div class="checklist-item-form-actions">
             <button class="btn-ghost person-edit-cancel-btn" data-id="${person.id}" data-kind="${kind}">取消</button>
             <button class="btn-solid person-edit-save-btn" data-id="${person.id}" data-kind="${kind}">儲存</button>
@@ -1545,7 +1549,6 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         <div class="person-card-head">
           <button class="person-toggle-btn" type="button" data-id="${person.id}" data-kind="${kind}" title="${collapsed?'展開細項':'收起細項'}" aria-expanded="${!collapsed}">▾</button>
           <span class="person-name">${escapeHtml(person.name)}</span>
-          ${monthTagHTML(person.months)}
           ${kind==='hire' ? `<span class="cat-badge" style="background:${person.type==='project'?'var(--cat-urgent)':'var(--cat-onboarding)'}">${person.type==='project'?'專案':'一般'}</span>` : ''}
           <span class="checklist-progress">${doneCount}/${items.length}</span>
           <button class="person-edit-btn" type="button" data-id="${person.id}" data-kind="${kind}" title="編輯">✎</button>
@@ -1562,9 +1565,64 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     `;
   }
 
+  const LEAVE_TYPE = { leave: { label:'留停', color:'var(--amber)' }, return: { label:'復職', color:'var(--green)' } };
+  function leaveTypeOptions(sel){
+    return Object.entries(LEAVE_TYPE).map(([k,v])=>`<option value="${k}" ${k===sel?'selected':''}>${v.label}</option>`).join('');
+  }
+  function leaveSectionHTML(){
+    const rows = leaves.map(l=>{
+      const t = LEAVE_TYPE[l.type] || LEAVE_TYPE.leave;
+      if(editingLeaveId === l.id){
+        return `
+          <div class="check-item editing" data-id="${l.id}">
+            <input type="text" class="edit-leave-name" value="${escapeHtml(l.name)}">
+            <select class="edit-leave-type">${leaveTypeOptions(l.type)}</select>
+            <div class="checklist-item-form-actions">
+              <button class="btn-ghost leave-edit-cancel-btn" type="button">取消</button>
+              <button class="btn-solid leave-edit-save-btn" type="button" data-id="${l.id}">儲存</button>
+            </div>
+          </div>`;
+      }
+      return `
+        <label class="check-item ${l.done?'checked':''}">
+          <input type="checkbox" class="leave-cb" data-id="${l.id}" ${l.done?'checked':''}>
+          <span class="cat-badge" style="background:${t.color}">${t.label}</span>
+          <span class="check-item-text">${escapeHtml(l.name)}</span>
+          ${checkedDateHTML(l.done)}
+          <span class="check-item-actions">
+            <button class="check-item-edit-btn leave-edit-btn" type="button" data-id="${l.id}" title="編輯">✎</button>
+            <button class="check-item-del-btn leave-del-btn" type="button" data-id="${l.id}" title="刪除">✕</button>
+          </span>
+        </label>`;
+    }).join('');
+    const nLeave = leaves.filter(l=>l.type==='leave').length, nReturn = leaves.filter(l=>l.type==='return').length;
+    return `
+      <div class="checklist-section ${collapsedSections.leave?'collapsed':''}">
+        <div class="checklist-section-head">
+          ${sectionToggleHTML('leave')}
+          <h3>🔄&nbsp;&nbsp;留停／復職</h3>
+          <span class="checklist-progress">留停 ${nLeave}・復職 ${nReturn}</span>
+          <button class="btn-mini leave-add-btn" type="button">＋ 新增人員</button>
+        </div>
+        <div class="checklist-section-body">
+          ${addingLeave ? `
+            <div class="checklist-item-form">
+              <input type="text" class="new-leave-name" placeholder="輸入姓名">
+              <select class="new-leave-type">${leaveTypeOptions('leave')}</select>
+              <div class="checklist-item-form-actions">
+                <button class="btn-ghost leave-cancel-btn" type="button">取消</button>
+                <button class="btn-solid leave-save-btn" type="button">新增</button>
+              </div>
+            </div>` : ''}
+          <div class="checklist-items">
+            ${rows || '<div class="empty-col">— 尚無留停／復職人員 —</div>'}
+          </div>
+        </div>
+      </div>`;
+  }
+
   function rosterSectionHTML(kind){
-    const list = (kind==='hire' ? newHires : departures)
-      .filter(p=> !p.months || !p.months.length || p.months.includes(checklistMonth.m));
+    const list = kind==='hire' ? newHires : departures;
     const title = kind==='hire' ? '👏🏻&nbsp;&nbsp;新進人員' : '👋🏻&nbsp;&nbsp;離職人員';
     const addFlag = kind==='hire' ? addingHire : addingDeparture;
     return `
@@ -1584,7 +1642,6 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
                 <option value="project">專案</option>
                 <option value="general" selected>一般</option>
               </select>` : ''}
-            ${monthCheckboxesHTML([], 'newperson')}
             <div class="checklist-item-form-actions">
               <button class="btn-ghost person-cancel-btn" data-kind="${kind}">取消</button>
               <button class="btn-solid person-save-btn" data-kind="${kind}">新增</button>
@@ -1609,7 +1666,8 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       checklistSectionHTML('medical') +
       checklistSectionHTML('other') +
       rosterSectionHTML('hire') +
-      rosterSectionHTML('departure');
+      rosterSectionHTML('departure') +
+      leaveSectionHTML();
     wireChecklistEvents(container);
   }
 
@@ -1701,14 +1759,12 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         const form = btn.closest('.checklist-item-form');
         const name = form.querySelector('.new-person-name').value.trim();
         if(!name){ showToast('請輸入姓名'); return; }
-        const pm = Array.from(form.querySelectorAll('.newperson-month-cb:checked')).map(cb=>parseInt(cb.value,10));
-        const months = pm.length ? pm : null;
         if(kind==='hire'){
           const type = form.querySelector('.new-person-type').value;
-          newHires.push({ id: uid(), name, type, months, createdAt: Date.now(), items: templateItems('hire', type), checks: {} });
+          newHires.push({ id: uid(), name, type, createdAt: Date.now(), items: templateItems('hire', type), checks: {} });
           addingHire = false;
         } else {
-          departures.push({ id: uid(), name, months, createdAt: Date.now(), items: templateItems('departure'), checks: {} });
+          departures.push({ id: uid(), name, createdAt: Date.now(), items: templateItems('departure'), checks: {} });
           addingDeparture = false;
         }
         persist();
@@ -1739,8 +1795,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         const p = list.find(x=>x.id===id);
         if(p){
           p.name = name;
-          const pm = Array.from(box.querySelectorAll('.editperson-month-cb:checked')).map(cb=>parseInt(cb.value,10));
-          p.months = pm.length ? pm : null;
+          delete p.months;
           if(kind==='hire'){
             const newType = box.querySelector('.edit-person-type').value;
             if(newType !== p.type){ p.type = newType; p.items = templateItems('hire', newType); p.checks = {}; }
@@ -1870,6 +1925,42 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         if(e.key==='Escape'){ editingPersonItem = null; addingPersonItemFor = null; renderChecklistView(); }
       });
     });
+
+    // 留停／復職
+    container.querySelectorAll('.leave-add-btn').forEach(btn=> btn.addEventListener('click', ()=>{
+      addingLeave = true; collapsedSections.leave = false; renderChecklistView();
+      const inp = container.querySelector('.new-leave-name'); if(inp) inp.focus();
+    }));
+    container.querySelectorAll('.leave-cancel-btn').forEach(btn=> btn.addEventListener('click', ()=>{ addingLeave = false; renderChecklistView(); }));
+    container.querySelectorAll('.leave-save-btn').forEach(btn=> btn.addEventListener('click', ()=>{
+      const form = btn.closest('.checklist-item-form');
+      const name = form.querySelector('.new-leave-name').value.trim();
+      if(!name){ showToast('請輸入姓名'); return; }
+      leaves.push({ id: uid(), name, type: form.querySelector('.new-leave-type').value, done: null, createdAt: Date.now() });
+      addingLeave = false; persist(); renderChecklistView(); showToast('已新增');
+    }));
+    container.querySelectorAll('.leave-cb').forEach(cb=> cb.addEventListener('change', ()=>{
+      const l = leaves.find(x=>x.id===cb.dataset.id);
+      if(l){ l.done = l.done ? null : Date.now(); persist(); renderChecklistView(); }
+    }));
+    container.querySelectorAll('.leave-edit-btn').forEach(btn=> btn.addEventListener('click', e=>{
+      e.preventDefault(); editingLeaveId = btn.dataset.id; renderChecklistView();
+    }));
+    container.querySelectorAll('.leave-edit-cancel-btn').forEach(btn=> btn.addEventListener('click', ()=>{ editingLeaveId = null; renderChecklistView(); }));
+    container.querySelectorAll('.leave-edit-save-btn').forEach(btn=> btn.addEventListener('click', ()=>{
+      const box = btn.closest('.check-item.editing');
+      const name = box.querySelector('.edit-leave-name').value.trim();
+      if(!name){ showToast('姓名不能是空的'); return; }
+      const l = leaves.find(x=>x.id===btn.dataset.id);
+      if(l){ l.name = name; l.type = box.querySelector('.edit-leave-type').value; }
+      editingLeaveId = null; persist(); renderChecklistView(); showToast('已更新');
+    }));
+    container.querySelectorAll('.leave-del-btn').forEach(btn=> btn.addEventListener('click', async e=>{
+      e.preventDefault();
+      if(!(await askConfirm('確定要刪除這筆留停／復職紀錄嗎？'))) return;
+      leaves = leaves.filter(x=>x.id!==btn.dataset.id);
+      persist(); renderChecklistView(); showToast('已刪除');
+    }));
   }
 
   function toggleChecklistItem(itemId){
