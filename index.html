@@ -829,6 +829,10 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
 .pj-pill{ font-family:var(--font-display); font-weight:700; font-size:12px; background:var(--panel-2); color:var(--ink-dim); border-radius:999px; padding:3px 10px; }
 .pj-pill.warn{ background:var(--rose); color:#fff; }
 .pj-pill.now{ background:#FFF0D6; color:#C98A1E; }
+.pj-panel > .pj-title[data-pj-sec]{ cursor:pointer; user-select:none; }
+.pj-panel.collapsed > .pj-title{ margin-bottom:0; }
+.pj-panel.collapsed .pj-body{ display:none; }
+.pj-panel.collapsed .pj-toggle{ transform: rotate(-90deg); }
 .pj-sync{ display:inline-flex; align-items:center; gap:6px; font-size:12.5px; font-weight:700; color:var(--ink-dim); margin-top:10px; cursor:pointer; }
 .pj-sync input{ width:15px; height:15px; padding:0; accent-color:var(--coral); }
 .cal-chip.proj{ background: #F6F0FC; }
@@ -2261,9 +2265,29 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       detail.innerHTML = `<div class="pj-empty">還沒有專案，點左邊「＋ 新增專案」或「📥 從 Notion 匯入」開始吧</div>`;
       return;
     }
-    detail.innerHTML = pjHeadHTML(p) + `<div class="pj-panel">${pjDocsHTML(p)}</div>`
-      + `<div class="pj-panel"><div class="pj-title">📊 時程圖 <span class="pj-hint">滑鼠移到色條上看日期，點色條可直接編輯</span></div>${pjGanttHTML(p)}</div>`
-      + `<div class="pj-panel">${pjItemsHTML(p)}</div>`;
+    const sec = (key, title, hint, body)=>{
+      const c = !!collapsedSections['pj-' + key];
+      return `<div class="pj-panel ${c?'collapsed':''}">
+        <div class="pj-title" data-pj-sec="${key}">
+          <button class="section-toggle-btn pj-toggle" type="button" title="${c?'展開':'收起'}" aria-expanded="${!c}">▾</button>
+          ${title} <span class="pj-hint">${hint}</span>
+        </div>
+        <div class="pj-body">${body}</div>
+      </div>`;
+    };
+    // 排序：1.細項安排 → 2.產出文件 → 3.時程圖
+    detail.innerHTML = pjHeadHTML(p)
+      + sec('items', '📝 細項安排', '依開始日期自動排序；工作天數會扣掉六日與國定假日', pjItemsHTML(p))
+      + sec('docs', '📂 產出文件', `已產出 ${p.docs.filter(d=>d.done).length}/${p.docs.length}；截止日跟著對應細項的結束日`, pjDocsHTML(p))
+      + sec('gantt', '📊 時程圖', '滑鼠移到色條上看日期，點色條可直接編輯', pjGanttHTML(p));
+    detail.querySelectorAll('.pj-title[data-pj-sec]').forEach(t=>{
+      t.addEventListener('click', ()=>{
+        const k = 'pj-' + t.dataset.pjSec;
+        collapsedSections[k] = !collapsedSections[k];
+        persist();
+        renderProjects();
+      });
+    });
     wireProjectDetail(p, detail);
   }
 
@@ -2338,7 +2362,6 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       </div>`;
     }).join('');
     return `
-      <div class="pj-title">📂 產出文件 <span class="pj-hint">這個專案要交出哪些文件；截止日跟著對應細項的結束日</span></div>
       <div class="pj-doc-summary">
         <span class="pj-pill">已產出 ${done}/${p.docs.length}</span>
         ${Object.entries(counts).map(([k,n])=>`<span class="pj-pill">${(PJ_DOC_TYPES[k]||PJ_DOC_TYPES.other).icon} ${(PJ_DOC_TYPES[k]||PJ_DOC_TYPES.other).label} ${n}</span>`).join('')}
@@ -2424,7 +2447,6 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       </tr>`;
     }).join('');
     return `
-      <div class="pj-title">📝 細項安排 <span class="pj-hint">依開始日期自動排序；工作天數會扣掉六日與國定假日</span></div>
       <table class="pj-tbl">
         <thead><tr><th></th><th>日期</th><th>工作天數</th><th>項目內容</th><th class="pj-c-docs">產出文件</th><th class="pj-c-note">備註</th><th></th></tr></thead>
         <tbody>${rows || '<tr><td colspan="7"><div class="empty-col">— 尚無細項 —</div></td></tr>'}</tbody>
@@ -2495,7 +2517,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
 
     // 時程圖點擊 → 編輯細項
     root.querySelectorAll('.pj-g-bar').forEach(b=> b.addEventListener('click', ()=>{
-      editingProjItemId = b.dataset.id; renderProjects();
+      editingProjItemId = b.dataset.id; collapsedSections['pj-items'] = false; renderProjects();
       const row = document.querySelector('.pj-edit-row');
       if(row) row.scrollIntoView({ behavior:'smooth', block:'center' });
     }));
