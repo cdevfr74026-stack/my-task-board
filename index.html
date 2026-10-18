@@ -678,6 +678,11 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   white-space:nowrap;
 }
 .check-item.checked .check-date{ opacity:1; }
+.month-tag{
+  flex-shrink:0; font-family: var(--font-display); font-weight:700; font-size:11px;
+  color: var(--ink-dim); background: var(--panel); border:1px dashed var(--line, #E8D5C8);
+  border-radius:999px; padding:1px 8px; white-space:nowrap;
+}
 .check-item-edit-btn, .check-item-del-btn{
   background:none; border:none; color: var(--ink-faint); font-size:12px; cursor:pointer;
   width:22px; height:22px; border-radius:50%;
@@ -1149,7 +1154,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     return `
       <div class="checklist-item-form" data-section="${section}">
         <input type="text" class="new-item-text" placeholder="輸入項目名稱">
-        ${section==='other' ? monthCheckboxesHTML([], 'newitem') : ''}
+        ${monthCheckboxesHTML([], 'newitem')}
         <div class="checklist-item-form-actions">
           <button class="btn-ghost item-cancel-btn" data-section="${section}">取消</button>
           <button class="btn-solid item-save-btn" data-section="${section}">新增</button>
@@ -1159,6 +1164,12 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   }
 
   // 勾選值：數字＝勾選時間戳；true＝舊資料（無日期）
+  function monthTagHTML(months){
+    if(!months || !months.length) return '';
+    const sorted = [...months].sort((a,b)=>a-b);
+    return `<span class="month-tag" title="套用月份：${sorted.join('、')}月">${sorted.join('・')}月</span>`;
+  }
+
   function checkedDateHTML(val){
     if(typeof val !== 'number') return '';
     const d = new Date(val);
@@ -1171,7 +1182,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       return `
         <div class="check-item editing" data-id="${it.id}">
           <input type="text" class="edit-item-text" value="${escapeHtml(it.text)}">
-          ${it.section==='other' ? monthCheckboxesHTML(it.months, 'edititem') : ''}
+          ${monthCheckboxesHTML(it.months, 'edititem')}
           <div class="checklist-item-form-actions">
             <button class="btn-ghost item-edit-cancel-btn" data-id="${it.id}">取消</button>
             <button class="btn-solid item-edit-save-btn" data-id="${it.id}">儲存</button>
@@ -1183,6 +1194,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       <label class="check-item ${checked?'checked':''}">
         <input type="checkbox" class="check-item-cb" data-id="${it.id}" ${checked?'checked':''}>
         <span class="check-item-text">${escapeHtml(it.text)}</span>
+        ${monthTagHTML(it.months)}
         ${checkedDateHTML(checkVal)}
         <span class="check-item-actions">
           <button class="check-item-edit-btn" type="button" data-id="${it.id}" title="編輯">✎</button>
@@ -1255,6 +1267,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
               <option value="general" ${person.type==='general'?'selected':''}>一般</option>
             </select>
             <div class="month-picker-label">※ 更換類型會把細項重設為該類型的預設清單</div>` : ''}
+          ${monthCheckboxesHTML(person.months, 'editperson')}
           <div class="checklist-item-form-actions">
             <button class="btn-ghost person-edit-cancel-btn" data-id="${person.id}" data-kind="${kind}">取消</button>
             <button class="btn-solid person-edit-save-btn" data-id="${person.id}" data-kind="${kind}">儲存</button>
@@ -1298,6 +1311,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         <div class="person-card-head">
           <button class="person-toggle-btn" type="button" data-id="${person.id}" data-kind="${kind}" title="${collapsed?'展開細項':'收起細項'}" aria-expanded="${!collapsed}">▾</button>
           <span class="person-name">${escapeHtml(person.name)}</span>
+          ${monthTagHTML(person.months)}
           ${kind==='hire' ? `<span class="cat-badge" style="background:${person.type==='project'?'var(--cat-urgent)':'var(--cat-onboarding)'}">${person.type==='project'?'專案':'一般'}</span>` : ''}
           <span class="checklist-progress">${doneCount}/${items.length}</span>
           <button class="person-edit-btn" type="button" data-id="${person.id}" data-kind="${kind}" title="編輯">✎</button>
@@ -1315,7 +1329,8 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   }
 
   function rosterSectionHTML(kind){
-    const list = kind==='hire' ? newHires : departures;
+    const list = (kind==='hire' ? newHires : departures)
+      .filter(p=> !p.months || !p.months.length || p.months.includes(checklistMonth.m));
     const title = kind==='hire' ? '👏🏻&nbsp;&nbsp;新進人員' : '👋🏻&nbsp;&nbsp;離職人員';
     const addFlag = kind==='hire' ? addingHire : addingDeparture;
     return `
@@ -1335,6 +1350,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
                 <option value="project">專案</option>
                 <option value="general" selected>一般</option>
               </select>` : ''}
+            ${monthCheckboxesHTML([], 'newperson')}
             <div class="checklist-item-form-actions">
               <button class="btn-ghost person-cancel-btn" data-kind="${kind}">取消</button>
               <button class="btn-solid person-save-btn" data-kind="${kind}">新增</button>
@@ -1387,11 +1403,8 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         const form = btn.closest('.checklist-item-form');
         const text = form.querySelector('.new-item-text').value.trim();
         if(!text){ showToast('請輸入項目名稱'); return; }
-        let months = null;
-        if(section==='other'){
-          const checked = Array.from(form.querySelectorAll('.newitem-month-cb:checked')).map(cb=>parseInt(cb.value,10));
-          months = checked.length ? checked : null;
-        }
+        const checkedM = Array.from(form.querySelectorAll('.newitem-month-cb:checked')).map(cb=>parseInt(cb.value,10));
+        const months = checkedM.length ? checkedM : null;
         checklistItems.push({ id: uid(), section, text, months });
         addingItemSection = null;
         persist();
@@ -1414,10 +1427,8 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         const it = checklistItems.find(x=>x.id===id);
         if(it){
           it.text = text;
-          if(it.section==='other'){
-            const checked = Array.from(box.querySelectorAll('.edititem-month-cb:checked')).map(cb=>parseInt(cb.value,10));
-            it.months = checked.length ? checked : null;
-          }
+          const checkedM = Array.from(box.querySelectorAll('.edititem-month-cb:checked')).map(cb=>parseInt(cb.value,10));
+          it.months = checkedM.length ? checkedM : null;
         }
         editingChecklistItemId = null;
         persist();
@@ -1456,12 +1467,14 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         const form = btn.closest('.checklist-item-form');
         const name = form.querySelector('.new-person-name').value.trim();
         if(!name){ showToast('請輸入姓名'); return; }
+        const pm = Array.from(form.querySelectorAll('.newperson-month-cb:checked')).map(cb=>parseInt(cb.value,10));
+        const months = pm.length ? pm : null;
         if(kind==='hire'){
           const type = form.querySelector('.new-person-type').value;
-          newHires.push({ id: uid(), name, type, createdAt: Date.now(), items: templateItems('hire', type), checks: {} });
+          newHires.push({ id: uid(), name, type, months, createdAt: Date.now(), items: templateItems('hire', type), checks: {} });
           addingHire = false;
         } else {
-          departures.push({ id: uid(), name, createdAt: Date.now(), items: templateItems('departure'), checks: {} });
+          departures.push({ id: uid(), name, months, createdAt: Date.now(), items: templateItems('departure'), checks: {} });
           addingDeparture = false;
         }
         persist();
@@ -1492,6 +1505,8 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         const p = list.find(x=>x.id===id);
         if(p){
           p.name = name;
+          const pm = Array.from(box.querySelectorAll('.editperson-month-cb:checked')).map(cb=>parseInt(cb.value,10));
+          p.months = pm.length ? pm : null;
           if(kind==='hire'){
             const newType = box.querySelector('.edit-person-type').value;
             if(newType !== p.type){ p.type = newType; p.items = templateItems('hire', newType); p.checks = {}; }
