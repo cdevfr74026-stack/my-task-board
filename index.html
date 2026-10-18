@@ -3119,6 +3119,9 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         document.getElementById('login-email').value = '';
         document.getElementById('login-password').value = '';
         document.getElementById('loginError').classList.add('hidden');
+        // 每次登入都先停在行事曆（本月）
+        calDate = new Date();
+        switchView('calendar');
         loadTasks();
       } else {
         document.getElementById('loginOverlay').classList.remove('hidden');
