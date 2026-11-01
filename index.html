@@ -597,6 +597,17 @@ button.stat-chip{ cursor:pointer; transition: all .15s ease; }
   box-shadow: 0 3px 0 rgba(255,225,204,0.8);
 }
 .note-head{ display:flex; align-items:center; gap:10px; margin-bottom: 8px; }
+.note-done-cb{ width:17px; height:17px; padding:0; margin:0; accent-color: var(--green); cursor:pointer; flex-shrink:0; }
+.note-card.done{ opacity:.7; }
+.note-card.done .note-content{ text-decoration: line-through; color: var(--ink-dim); }
+.note-columns{ display:grid; grid-template-columns: minmax(0,1fr) minmax(0,1fr); gap:18px; align-items:start; }
+.note-group{ display:flex; flex-direction:column; gap:12px; min-width:0; }
+@media (max-width: 760px){ .note-columns{ grid-template-columns: 1fr; } }
+.note-group-head{ display:flex; align-items:center; gap:8px; cursor:pointer; user-select:none; }
+.note-group-head h3{ margin:0; font-family: var(--font-display); font-size:17px; color: var(--ink); }
+.note-group.collapsed .note-group-body{ display:none; }
+.note-group.collapsed .note-group-toggle{ transform: rotate(-90deg); }
+.note-group-body{ display:flex; flex-direction:column; gap:12px; }
 .note-head .cat-badge{ margin-bottom: 0; }
 .note-date{ font-family: var(--font-display); font-size: 11px; color: var(--ink-faint); }
 .note-del{
@@ -735,6 +746,24 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
   color: var(--ink-dim); background: var(--panel); border:1px dashed var(--line, #E8D5C8);
   border-radius:999px; padding:1px 8px; white-space:nowrap;
 }
+.drag-grip{ color: var(--ink-faint); font-size:14px; cursor:grab; flex-shrink:0; line-height:1; padding:0 2px; user-select:none; }
+.check-item:hover .drag-grip, .person-card-head:hover .drag-grip{ color: var(--coral); }
+[data-sort-id]{ -webkit-touch-callout:none; }
+.check-item[data-sort-id], .person-card-head{ -webkit-user-select:none; user-select:none; }
+.check-item[data-sort-id], .person-card[data-sort-id]{ cursor:grab; }
+.sorting-active{ cursor:grabbing; }
+.sorting{
+  position:relative; z-index:5; opacity:.95; cursor:grabbing !important;
+  box-shadow: 0 10px 22px rgba(107,74,69,0.22) !important; transform: scale(1.015);
+  outline: 2px dashed var(--coral); outline-offset: 2px; background: #FFF7F0;
+}
+.move-btn{
+  background:none; border:none; color: var(--ink-faint); font-size:9px; cursor:pointer;
+  width:20px; height:22px; border-radius:6px; padding:0; line-height:1;
+}
+.move-btn:hover:not(:disabled){ color:#fff; background: var(--amber); }
+.move-btn:disabled{ opacity:.25; cursor:default; }
+.person-card-head .move-btn{ font-size:10px; }
 .check-item-edit-btn, .check-item-del-btn{
   background:none; border:none; color: var(--ink-faint); font-size:12px; cursor:pointer;
   width:22px; height:22px; border-radius:50%;
@@ -1415,7 +1444,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     return `<span class="check-date" title="${fmtNoteDate(val)} 完成">✓ ${d.getMonth()+1}/${d.getDate()}</span>`;
   }
 
-  function checklistItemHTML(it, checkVal){
+  function checklistItemHTML(it, checkVal, idx, len){
     const checked = !!checkVal;
     if(editingChecklistItemId === it.id){
       return `
@@ -1430,17 +1459,26 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       `;
     }
     return `
-      <label class="check-item ${checked?'checked':''}">
+      <label class="check-item ${checked?'checked':''}" data-sort-id="${it.id}">
+        <span class="drag-grip" title="按住拖曳排序">⠿</span>
         <input type="checkbox" class="check-item-cb" data-id="${it.id}" ${checked?'checked':''}>
         <span class="check-item-text">${escapeHtml(it.text)}</span>
         ${monthTagHTML(it.months)}
         ${checkedDateHTML(checkVal)}
         <span class="check-item-actions">
+          ${moveBtnsHTML(`data-mv="ck" data-id="${it.id}"`, idx, len)}
           <button class="check-item-edit-btn" type="button" data-id="${it.id}" title="編輯">✎</button>
           <button class="check-item-del-btn" type="button" data-id="${it.id}" title="刪除">✕</button>
         </span>
       </label>
     `;
+  }
+
+  // 上移／下移按鈕；attrs 例如 data-mv="ck" data-id="…"
+  function moveBtnsHTML(attrs, idx, len){
+    return '';
+    return `<button class="move-btn" type="button" ${attrs} data-dir="up" title="上移" ${idx<=0?'disabled':''}>▲</button>`
+         + `<button class="move-btn" type="button" ${attrs} data-dir="down" title="下移" ${idx>=len-1?'disabled':''}>▼</button>`;
   }
 
   function sectionToggleHTML(key){
@@ -1463,8 +1501,8 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         </div>
         <div class="checklist-section-body">
           ${addingItemSection===section ? addItemFormHTML(section) : ''}
-          <div class="checklist-items">
-            ${items.length ? items.map(it=> checklistItemHTML(it, checks[it.id])).join('') : '<div class="empty-col">— 本月尚無項目 —</div>'}
+          <div class="checklist-items" data-sort="ck" data-section="${section}">
+            ${items.length ? items.map((it,i,arr)=> checklistItemHTML(it, checks[it.id], i, arr.length)).join('') : '<div class="empty-col">— 本月尚無項目 —</div>'}
           </div>
         </div>
       </div>
@@ -1490,7 +1528,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     return person.items;
   }
 
-  function personCardHTML(person, kind){
+  function personCardHTML(person, kind, pIdx, pLen){
     const editingId = kind==='hire' ? editingHireId : editingDepartureId;
     const items = ensurePersonItems(person, kind);
     const checks = person.checks || {};
@@ -1513,7 +1551,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         </div>
       `;
     }
-    const itemRows = items.map(it=>{
+    const itemRows = items.map((it, iIdx)=>{
       if(editingPersonItem && editingPersonItem.personId===person.id && editingPersonItem.itemId===it.id){
         return `
           <div class="check-item editing">
@@ -1526,11 +1564,13 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       }
       const on = !!checks[it.id];
       return `
-        <label class="check-item ${on?'checked':''}">
+        <label class="check-item ${on?'checked':''}" data-sort-id="${it.id}">
+          <span class="drag-grip" title="按住拖曳排序">⠿</span>
           <input type="checkbox" class="person-check-cb" data-id="${person.id}" data-kind="${kind}" data-item="${it.id}" ${on?'checked':''}>
           <span class="check-item-text">${escapeHtml(it.text)}</span>
           ${checkedDateHTML(checks[it.id])}
           <span class="check-item-actions">
+            ${moveBtnsHTML(`data-mv="pitem" data-pid="${person.id}" data-kind="${kind}" data-id="${it.id}"`, iIdx, items.length)}
             <button class="check-item-edit-btn pitem-edit-btn" type="button" data-id="${person.id}" data-item="${it.id}" title="編輯細項">✎</button>
             <button class="check-item-del-btn pitem-del-btn" type="button" data-id="${person.id}" data-kind="${kind}" data-item="${it.id}" title="刪除細項">✕</button>
           </span>
@@ -1545,17 +1585,19 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
         </div>
       </div>` : '';
     return `
-      <div class="person-card ${collapsed?'collapsed':''}" data-id="${person.id}" data-kind="${kind}">
+      <div class="person-card ${collapsed?'collapsed':''}" data-id="${person.id}" data-kind="${kind}" data-sort-id="${person.id}">
         <div class="person-card-head">
+          <span class="drag-grip" title="按住拖曳排序">⠿</span>
           <button class="person-toggle-btn" type="button" data-id="${person.id}" data-kind="${kind}" title="${collapsed?'展開細項':'收起細項'}" aria-expanded="${!collapsed}">▾</button>
           <span class="person-name">${escapeHtml(person.name)}</span>
           ${kind==='hire' ? `<span class="cat-badge" style="background:${person.type==='project'?'var(--cat-urgent)':'var(--cat-onboarding)'}">${person.type==='project'?'專案':'一般'}</span>` : ''}
           <span class="checklist-progress">${doneCount}/${items.length}</span>
+          ${moveBtnsHTML(`data-mv="person" data-kind="${kind}" data-id="${person.id}"`, pIdx, pLen)}
           <button class="person-edit-btn" type="button" data-id="${person.id}" data-kind="${kind}" title="編輯">✎</button>
           <button class="person-del-btn" type="button" data-id="${person.id}" data-kind="${kind}" title="刪除">✕</button>
         </div>
         ${collapsed ? '' : `
-        <div class="checklist-items">
+        <div class="checklist-items" data-sort="pitem" data-pid="${person.id}" data-kind="${kind}">
           ${itemRows || '<div class="empty-col">— 尚無細項 —</div>'}
         </div>
         ${addForm}
@@ -1570,7 +1612,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     return Object.entries(LEAVE_TYPE).map(([k,v])=>`<option value="${k}" ${k===sel?'selected':''}>${v.label}</option>`).join('');
   }
   function leaveSectionHTML(){
-    const rows = leaves.map(l=>{
+    const rows = leaves.map((l, lIdx)=>{
       const t = LEAVE_TYPE[l.type] || LEAVE_TYPE.leave;
       if(editingLeaveId === l.id){
         return `
@@ -1584,12 +1626,14 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
           </div>`;
       }
       return `
-        <label class="check-item ${l.done?'checked':''}">
+        <label class="check-item ${l.done?'checked':''}" data-sort-id="${l.id}">
+          <span class="drag-grip" title="按住拖曳排序">⠿</span>
           <input type="checkbox" class="leave-cb" data-id="${l.id}" ${l.done?'checked':''}>
           <span class="cat-badge" style="background:${t.color}">${t.label}</span>
           <span class="check-item-text">${escapeHtml(l.name)}</span>
           ${checkedDateHTML(l.done)}
           <span class="check-item-actions">
+            ${moveBtnsHTML(`data-mv="leave" data-id="${l.id}"`, lIdx, leaves.length)}
             <button class="check-item-edit-btn leave-edit-btn" type="button" data-id="${l.id}" title="編輯">✎</button>
             <button class="check-item-del-btn leave-del-btn" type="button" data-id="${l.id}" title="刪除">✕</button>
           </span>
@@ -1614,7 +1658,7 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
                 <button class="btn-solid leave-save-btn" type="button">新增</button>
               </div>
             </div>` : ''}
-          <div class="checklist-items">
+          <div class="checklist-items" data-sort="leave">
             ${rows || '<div class="empty-col">— 尚無留停／復職人員 —</div>'}
           </div>
         </div>
@@ -1648,8 +1692,8 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
             </div>
           </div>
         ` : ''}
-        <div class="person-list">
-          ${list.length ? list.map(p=> personCardHTML(p, kind)).join('') : `<div class="empty-col">— 尚無${kind==='hire'?'新進':'離職'}人員 —</div>`}
+        <div class="person-list" data-sort="person" data-kind="${kind}">
+          ${list.length ? list.map((p,i)=> personCardHTML(p, kind, i, list.length)).join('') : `<div class="empty-col">— 尚無${kind==='hire'?'新進':'離職'}人員 —</div>`}
         </div>
         </div>
       </div>
@@ -1671,7 +1715,132 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     wireChecklistEvents(container);
   }
 
+  // ====== 拖曳排序（滑鼠：按住拖；手機：長按約 0.3 秒後拖） ======
+  function makeSortable(list, onDrop){
+    const isItem = el => el && el.parentElement === list && el.hasAttribute('data-sort-id');
+    // 手機長按時不要跳出系統選單
+    list.addEventListener('contextmenu', e=>{ if(e.target.closest('[data-sort-id]') && !e.target.closest('input, textarea')) e.preventDefault(); });
+    list.addEventListener('pointerdown', e=>{
+      if(e.button !== undefined && e.button !== 0) return;
+      if(e._sortHandled) return;
+      if(e.target.closest('input, button, select, textarea, a')) return;
+      let row = e.target.closest('[data-sort-id]');
+      while(row && !isItem(row)) row = row.parentElement ? row.parentElement.closest('[data-sort-id]') : null;
+      if(!row) return;
+      e._sortHandled = true;
+      const touch = e.pointerType !== 'mouse';
+      const sx = e.clientX, sy = e.clientY;
+      let dragging = false, timer = null;
+      const blockTouch = ev=>{ if(dragging) ev.preventDefault(); };
+      const start = ()=>{
+        dragging = true;
+        row.classList.add('sorting');
+        list.classList.add('sorting-active');
+        document.body.style.userSelect = 'none';
+        if(touch && navigator.vibrate) navigator.vibrate(15);
+      };
+      const move = ev=>{
+        const dx = ev.clientX - sx, dy = ev.clientY - sy;
+        if(!dragging){
+          if(touch){ if(Math.hypot(dx,dy) > 8) cleanup(); return; }
+          if(Math.hypot(dx,dy) > 5) start(); else return;
+        }
+        ev.preventDefault();
+        const y = ev.clientY;
+        if(y < 70) window.scrollBy(0, -14); else if(y > window.innerHeight - 70) window.scrollBy(0, 14);
+        const sibs = Array.from(list.children).filter(c=> c !== row && isItem(c));
+        let before = null;
+        for(const c of sibs){
+          const r = c.getBoundingClientRect();
+          if(y < r.top + r.height/2){ before = c; break; }
+        }
+        if(before){ if(row.nextElementSibling !== before) list.insertBefore(row, before); }
+        else { const last = sibs[sibs.length-1]; if(last && last.nextElementSibling !== row) last.after(row); }
+      };
+      const up = ()=>{
+        const was = dragging;
+        cleanup();
+        if(was){
+          // 拖曳結束後不要觸發勾選
+          const stop = ev=>{ ev.preventDefault(); ev.stopPropagation(); };
+          window.addEventListener('click', stop, true);
+          setTimeout(()=> window.removeEventListener('click', stop, true), 0);
+          onDrop(Array.from(list.children).filter(isItem).map(c=>c.getAttribute('data-sort-id')));
+        }
+      };
+      function cleanup(){
+        clearTimeout(timer);
+        document.removeEventListener('pointermove', move);
+        document.removeEventListener('pointerup', up);
+        document.removeEventListener('pointercancel', up);
+        document.removeEventListener('touchmove', blockTouch);
+        row.classList.remove('sorting');
+        list.classList.remove('sorting-active');
+        document.body.style.userSelect = '';
+        dragging = false;
+      }
+      document.addEventListener('pointermove', move, { passive:false });
+      document.addEventListener('pointerup', up);
+      document.addEventListener('pointercancel', up);
+      document.addEventListener('touchmove', blockTouch, { passive:false });
+      if(touch) timer = setTimeout(start, 300);
+    });
+  }
+  const reorderBy = (arr, ids)=> ids.map(id=> arr.find(x=>x.id===id)).filter(Boolean)
+    .concat(arr.filter(x=> !ids.includes(x.id)));
+
+  function wireSortables(container){
+    container.querySelectorAll('[data-sort]').forEach(list=>{
+      makeSortable(list, ids=>{
+        const type = list.dataset.sort;
+        if(type === 'ck'){
+          // 只重排當月看得到的項目，其他月份項目的位置不動
+          const slots = checklistItems.map((x,i)=> ids.includes(x.id) ? i : -1).filter(i=>i>=0);
+          const ordered = ids.map(id=> checklistItems.find(x=>x.id===id));
+          slots.forEach((slot, k)=>{ checklistItems[slot] = ordered[k]; });
+        } else if(type === 'pitem'){
+          const p = (list.dataset.kind==='hire' ? newHires : departures).find(x=>x.id===list.dataset.pid);
+          if(p && p.items) p.items = reorderBy(p.items, ids);
+        } else if(type === 'person'){
+          if(list.dataset.kind==='hire') newHires = reorderBy(newHires, ids);
+          else departures = reorderBy(departures, ids);
+        } else if(type === 'leave'){
+          leaves = reorderBy(leaves, ids);
+        }
+        persist();
+        renderChecklistView();
+      });
+    });
+  }
+
   function wireChecklistEvents(container){
+    wireSortables(container);
+    container.querySelectorAll('.move-btn').forEach(btn=>{
+      btn.addEventListener('click', e=>{
+        e.preventDefault(); e.stopPropagation();
+        if(btn.disabled) return;
+        const d = btn.dataset.dir === 'up' ? -1 : 1;
+        const swap = (arr, a, b)=>{ if(a<0 || b<0 || a>=arr.length || b>=arr.length) return false; [arr[a], arr[b]] = [arr[b], arr[a]]; return true; };
+        let ok = false;
+        const mv = btn.dataset.mv, id = btn.dataset.id;
+        if(mv === 'ck'){
+          const it = checklistItems.find(x=>x.id===id);
+          if(!it) return;
+          const visible = checklistItems.filter(x=>x.section===it.section && (!x.months || x.months.includes(checklistMonth.m)));
+          const other = visible[visible.indexOf(it) + d];
+          if(other) ok = swap(checklistItems, checklistItems.indexOf(it), checklistItems.indexOf(other));
+        } else if(mv === 'pitem'){
+          const p = (btn.dataset.kind==='hire' ? newHires : departures).find(x=>x.id===btn.dataset.pid);
+          if(p && p.items){ const i = p.items.findIndex(x=>x.id===id); ok = swap(p.items, i, i+d); }
+        } else if(mv === 'person'){
+          const arr = btn.dataset.kind==='hire' ? newHires : departures;
+          const i = arr.findIndex(x=>x.id===id); ok = swap(arr, i, i+d);
+        } else if(mv === 'leave'){
+          const i = leaves.findIndex(x=>x.id===id); ok = swap(leaves, i, i+d);
+        }
+        if(ok){ persist(); renderChecklistView(); }
+      });
+    });
     container.querySelectorAll('.section-toggle-btn').forEach(btn=>{
       btn.addEventListener('click', ()=>{
         const k = btn.dataset.sectionKey;
@@ -2903,10 +3072,12 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
       `;
     }
     return `
-      <div class="note-card" data-id="${n.id}">
+      <div class="note-card ${n.done?'done':''}" data-id="${n.id}">
         <div class="note-head">
+          <input type="checkbox" class="note-done-cb" data-id="${n.id}" ${n.done?'checked':''} title="${n.done?'改回未完成':'標記為已完成'}">
           <span class="cat-badge" style="background:${CATEGORY_COLOR[cat]}">${CATEGORY_LABEL[cat]}</span>
           <span class="note-date">${n.createdAt ? fmtNoteDate(n.createdAt) : ''}</span>
+          ${checkedDateHTML(n.done)}
           <button class="note-edit-btn" data-id="${n.id}" title="編輯筆記">✎</button>
           <button class="note-del" data-id="${n.id}" title="刪除筆記">✕</button>
         </div>
@@ -2923,7 +3094,42 @@ input:focus, textarea:focus, select:focus{ border-color: var(--coral); }
     const emptyMsg = categoryFilter === 'all'
       ? `<div class="empty-col">— 尚無筆記，寫下你遇到的第一個問題或注意事項吧 —</div>`
       : `<div class="empty-col">— 「${CATEGORY_LABEL[categoryFilter] || ''}」目前沒有筆記 —</div>`;
-    list.innerHTML = sorted.length ? sorted.map(noteCardHTML).join('') : emptyMsg;
+    if(!sorted.length){
+      list.innerHTML = emptyMsg;
+    } else {
+      const todo = sorted.filter(n=>!n.done);
+      const done = sorted.filter(n=>n.done).sort((a,b)=> (b.done||0) - (a.done||0));
+      const group = (key, title, arr, empty)=>{
+        const c = !!collapsedSections[key];
+        return `<div class="note-group ${c?'collapsed':''}">
+          <div class="note-group-head" data-key="${key}">
+            <button class="section-toggle-btn note-group-toggle" type="button" title="${c?'展開':'收起'}">▾</button>
+            <h3>${title}</h3><span class="checklist-progress">${arr.length}</span>
+          </div>
+          <div class="note-group-body">${arr.length ? arr.map(noteCardHTML).join('') : `<div class="empty-col">${empty}</div>`}</div>
+        </div>`;
+      };
+      list.innerHTML = `<div class="note-columns">`
+                     + group('notes-todo', '📝&nbsp;&nbsp;未完成', todo, '— 都處理完了 🎉 —')
+                     + group('notes-done', '✅&nbsp;&nbsp;已完成', done, '— 還沒有已完成的筆記 —')
+                     + `</div>`;
+    }
+    list.querySelectorAll('.note-group-head').forEach(h=>{
+      h.addEventListener('click', ()=>{
+        collapsedSections[h.dataset.key] = !collapsedSections[h.dataset.key];
+        persist(); renderNotes();
+      });
+    });
+    list.querySelectorAll('.note-done-cb').forEach(cb=>{
+      cb.addEventListener('click', e=> e.stopPropagation());
+      cb.addEventListener('change', ()=>{
+        const n = notes.find(x=>x.id===cb.dataset.id);
+        if(!n) return;
+        n.done = n.done ? null : Date.now();
+        persist(); renderNotes();
+        showToast(n.done ? '已移到「已完成」' : '已移回「未完成」');
+      });
+    });
     list.querySelectorAll('.note-del').forEach(btn=>{
       btn.addEventListener('click', (e)=>{
         e.stopPropagation();
